@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Todo Firebase</title>
+  <style>
+    body {
+      font-family: Arial;
+      max-width: 500px;
+      margin: 50px auto;
+    }
+    input {
+      width: 70%;
+      padding: 10px;
+    }
+    button {
+      padding: 10px;
+      cursor: pointer;
+    }
+    li {
+      display: flex;
+      justify-content: space-between;
+      margin: 10px 0;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Todo List</h1>
+
+  <input id="taskInput" placeholder="Nouvelle tâche">
+  <button onclick="addTask()">Ajouter</button>
+
+  <ul id="taskList"></ul>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
+    import { 
+      getFirestore, collection, addDoc, 
+      onSnapshot, deleteDoc, doc 
+    } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSy...",
+      authDomain: "emotions-management.firebaseapp.com",
+      projectId: "emotions-management",
+      storageBucket: "emotions-management.firebasestorage.app",
+      messagingSenderId: "683094740966",
+      appId: "1:683094740966:web:257ec04bc222158e639027"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    const input = document.getElementById("taskInput");
+    const list = document.getElementById("taskList");
+
+    // Ajouter
+    window.addTask = async function () {
+      if (input.value.trim() === "") return;
+
+      await addDoc(collection(db, "tasks"), {
+        text: input.value,
+        done: false
+      });
+
+      input.value = "";
+    };
+
+    // Affichage temps réel
+    onSnapshot(collection(db, "tasks"), snapshot => {
+      list.innerHTML = "";
+
+      snapshot.forEach(docSnap => {
+        const li = document.createElement("li");
+        li.textContent = docSnap.data().text;
+
+        const btn = document.createElement("button");
+        btn.textContent = "Supprimer";
+
+        btn.onclick = async () => {
+          await deleteDoc(doc(db, "tasks", docSnap.id));
+        };
+
+        li.appendChild(btn);
+        list.appendChild(li);
+      });
+    });
+  </script>
+
+</body>
+</html>
