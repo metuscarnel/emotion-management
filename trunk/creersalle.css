@@ -1,0 +1,144 @@
+:root {
+    --wine-dark: #830c2a;   /* couleur principale */
+    --wine: #6d0b24;        /* rouge standard */
+    --wine-light: #791124;  /* rouge plus clair */
+    --background: #f6f3f4;  /* couleur de fond du site */
+    --text-dark: #2c2c2c;   /* couleur du texte */
+    --white: #ffffff;      
+}
+
+* {
+    margin: 0;              /* enlève les marges par défaut */
+    padding: 0;             /* enlève les espacements internes */
+    box-sizing: border-box; /* inclut padding + border dans la taille */
+}
+
+body {
+    font-family: 'Poppins', sans-serif; /* police choisie sur le html */
+    background-color: var(--background); /* fond de la page */
+    color: var(--text-dark);             /* couleur du texte */
+}
+
+
+.hero {
+    background: linear-gradient(135deg, var(--wine-dark), var(--wine));
+    /* dégradé rouge */
+
+    color: white;          /* texte en blanc */
+    text-align: center;      /* centre le texte */
+    padding: 80px 20px;      /* espace intérieur  */
+}
+
+/* Titre principal dans le hero */
+.hero h1 {
+    font-size: 2.5rem;   /* taille du texte */
+    font-weight: 600;    /* épaisseur  */
+}
+
+/* Sous-titre dans le hero */
+.subtitle {
+    margin-top: 10px;    /* espace au-dessus */
+    font-size: 1.1rem;   /* taille du texte*/
+    opacity: 0.9;        /* transparence du texte */
+}
+
+.center-container {
+    display: flex;              /* active flexbox */
+    justify-content: center;    /* centre horizontalement */
+    align-items: center;        /* centre verticalement */
+    min-height: 80vh;           /* hauteur du rectangle*/
+    padding: 40px 20px;         /* espace autour */
+}
+
+
+.rectangle {
+    background-color: var(--white);     /* fond blanc */
+    border: 2px solid var(--wine);      /* bordure rouge */
+    border-radius: 12px;                /* coins arrondis */
+    padding: 60px;                      /* espace interne */
+    width: 100%;                        /* prend toute la largeur dispo */
+    max-width: 700px;                   /* mais max 700px (pour pas que ce soit très grand) */
+    text-align: center;                 /* centre le texte */
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1); /* ombre légère */
+}
+
+
+.room-created {
+    display: flex;              /* flexbox */
+    flex-direction: column;     /* éléments en colonne */
+    align-items: center;        /* centre horizontalement */
+    gap: 30px;                  /* espace entre les éléments */
+}
+
+/* Titre de la section */
+.room-created h1 {
+    color: var(--wine-dark); /* couleur rouge foncé */
+}
+
+
+.code-box {
+    background: var(--white);        /* fond blanc */
+    padding: 40px 60px;              /* espace interne */
+    border-radius: 16px;             /* coins arrondis */
+    box-shadow: 0 10px 25px rgba(0,0,0,0.1); /* ombre */
+}
+
+/* Code affiché */
+.code-box h2 {
+    font-size: 2.5rem;   /* police du texte */
+    color: var(--wine);  /* rouge */
+}
+
+
+.instructions {
+    max-width: 500px;  /* limite largeur pour lisibilité */
+    text-align: left;  /* texte aligné à gauche */
+}
+
+/* Titre "Consignes" */
+.instructions h3 {
+    margin-bottom: 15px;      /* espace en dessous */
+    color: var(--wine-dark);  /* rouge foncé */
+}
+
+/* Liste */
+.instructions ul {
+    padding-left: 20px; /* espace pour les puces */
+}
+
+/* Chaque élément de liste */
+.instructions li {
+    margin-bottom: 10px; /* espace entre les lignes */
+}
+
+
+.btn-primary {
+    background: var(--wine);   /* couleur de fond */
+    color: white;              /* texte blanc */
+    border: none;              /* pas de bordure */
+    padding: 15px 35px;        /* taille du bouton */
+    border-radius: 25px;       /* bouton arrondi */
+    font-size: 1rem;           /* taille du texte */
+    cursor: pointer;           /* curseur main */
+    transition: background 0.3s ease; /* animation douce */
+}
+
+/* Effet au survol */
+.btn-primary:hover {
+    background: var(--wine-dark); /* devient plus foncé */
+}
+
+
+footer {
+    background: var(--wine-dark); /* fond rouge foncé */
+    color: white;                 /* texte blanc */
+    text-align: center;           /* centré */
+    padding: 25px 15px;           /* espace interne */
+    font-size: 0.85rem;           /* texte petit */
+}
+
+/* Texte de confidentialité */
+.privacy {
+    margin-bottom: 10px; /* espace en dessous */
+    opacity: 0.9;        /* légèrement transparent */
+}

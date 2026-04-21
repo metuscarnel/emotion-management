@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Salle d'attente — Emotion Monitoring Platform</title>
+    <link rel="stylesheet" href="salle.css">
+</head>
+<body>
+
+    <!-- ===== En-tête ===== -->
+    <header>
+        <div class="header-inner">
+            <div class="header-left">
+                <h1>Emotion Monitoring Platform</h1>
+                <p>Salle d'attente</p>
+                <p id="nomSalleHeader">Chargement…</p>
+            </div>
+            <div class="header-right">
+                <div class="code-badge">
+                    <span class="code-label">Code de la salle</span>
+                    <span class="code-value" id="codeAffiche">——</span>
+                    <button class="btn-copy-code" type="button" onclick="copierCode()" title="Copier le code">
+                        📋
+                    </button>
+                </div>
+                <div class="statut-live">
+                    <span class="dot-live"></span> En attente
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- ===== Contenu principal ===== -->
+    <main>
+
+        <!-- Carte participants -->
+        <div class="card">
+
+            <h2 class="section-title">
+                Participants connectés
+                <span class="badge-count" id="nbParticipants">0</span>
+            </h2>
+
+            <!-- Liste des participants -->
+            <div id="listeParticipants" class="liste-participants">
+                <div class="empty-state" id="emptyState">
+                    <div class="empty-icon">👥</div>
+                    <p>En attente des participants…</p>
+                    <small>Partagez le code de la salle pour qu'ils puissent rejoindre.</small>
+                </div>
+            </div>
+
+            <!-- Séparateur -->
+            <hr class="divider">
+
+            <!-- Infos de session -->
+            <div class="session-info">
+                <div class="info-item">
+                    <span class="info-icon">📅</span>
+                    <div>
+                        <span class="info-label">Date</span>
+                        <span class="info-value" id="infoDate">—</span>
+                    </div>
+                </div>
+                <div class="info-item">
+                    <span class="info-icon">⏱️</span>
+                    <div>
+                        <span class="info-label">Durée prévue</span>
+                        <span class="info-value" id="infoDuree">—</span>
+                    </div>
+                </div>
+                <div class="info-item">
+                    <span class="info-icon">👤</span>
+                    <div>
+                        <span class="info-label">Professeur</span>
+                        <span class="info-value" id="infoProf">—</span>
+                    </div>
+                </div>
+                <div class="info-item">
+                    <span class="info-icon">📷</span>
+                    <div>
+                        <span class="info-label">Webcam</span>
+                        <span class="info-value" id="infoWebcam">—</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Options activées -->
+            <div class="options-actives" id="optionsActives"></div>
+
+            <!-- Bouton lancer -->
+            <button class="btn btn-lancer" type="button" id="btnLancer"
+                    onclick="lancerActivite()" disabled>
+                  Lancer l'activité
+            </button>
+
+            <p class="hint-lancer" id="hintLancer">
+                En attente d'au moins 1 participant pour lancer.
+            </p>
+
+            <!-- Lien retour -->
+            <p class="retour">
+                <a href="creersalle.html">← Retour à la création de salle</a>
+            </p>
+
+        </div>
+
+    </main>
+
+    <!-- ===== Pied de page ===== -->
+    <footer>
+        <p>🔒 Consentement explicite • Webcam optionnelle • Données anonymisées • Aucune image conservée</p>
+        <p>© 2026 — Projet L2T1 — Université Paris Cité</p>
+    </footer>
+
+    <script src="salle.js"></script>
+
+</body>
+</html>

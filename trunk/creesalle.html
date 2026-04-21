@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Inscription professeur</title>
+  <link rel="stylesheet" href="creesalle.css">
+</head>
+<body>
+
+  <div class="container">
+    <h1>Inscription professeur</h1>
+    <p class="subtitle"> <em>Créer un compte pour créer une salle</em></p>
+
+    <label>Nom</label>
+    <input type="text" id="nom" placeholder="Nom">
+
+    <label>Prénom</label>
+    <input type="text" id="prenom" placeholder="Prénom">
+
+    <label>Mail institutionnel</label>
+    <input type="email" id="email" placeholder="prenom.nom@u-paris.fr">
+
+    <label>Matière</label>
+    <input type="text" id="matiere" placeholder="Matière">
+
+    <p class="error-message" id="errorMessage">
+      ⚠️ Tous les champs doivent être remplis et le mail doit être valide.
+    </p>
+
+    <!-- Lien -->
+    <a href="identifprof.html" class="btn" id="submitBtn">Créer un compte</a>
+
+    <div class="bottom-link">
+      Vous avez déjà un compte ?<br>
+      <a href="identifprof.html">Connectez-vous →</a>
+    </div>
+  </div>
+
+  <script type="module" src="creesalle.js"></script>
+</body>
+</html>

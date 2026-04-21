@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Salle d'attente</title>
+  <link rel="stylesheet" href="voirlasalle.css">
+</head>
+<body>
+
+  <div class="background">
+    <h1>Salle d’attente</h1>
+    <p class="subtitle">Liste des personnes connectées en temps réel</p>
+
+    <div class="card">
+      <h2>Personnes connectées</h2>
+      <p class="info" id="summary">
+        → 0 participants connectés | Dernière activité : --
+      </p>
+
+      <div id="participantsList"></div>
+
+      <div class="total">
+        👥 Nombre total de participants : <span id="totalCount">0</span>
+      </div>
+
+      <a href="create.html" class="btn">← Retour</a>
+    </div>
+  </div>
+
+  <script type="module" src="voirlasalle.js"></script>
+</body>
+</html>

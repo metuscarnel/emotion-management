@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Rejoindre une salle</title>
+  <link rel="stylesheet" href="rejoindresalle.css">
+  <script defer src="https://unpkg.com/face-api.js"></script>
+</head>
+<body>
+
+<div class="container">
+
+  <h1>Rejoindre une salle</h1>
+  <p class="subtitle">Entrez le code fourni par votre enseignant</p>
+
+  <!-- CODE SALLE -->
+  <label>Code de la salle</label>
+  <input type="text" id="roomCode" placeholder="CODE À 8 CARACTÈRES" maxlength="8">
+  <small id="codeError" class="error"></small>
+
+  <!-- WEBCAM SETTINGS -->
+  <h2>Paramètres webcam</h2>
+
+  <div class="options">
+    <div class="option active" id="enableCam">
+      <span class="icon">📷</span>
+      <strong>Activer la webcam</strong>
+      <p>Autoriser la détection des émotions</p>
+    </div>
+
+    <div class="option" id="noCam">
+      <span class="icon">❓</span>
+      <strong>Questionnaire uniquement</strong>
+      <p>Participer sans webcam</p>
+    </div>
+  </div>
+
+  <!-- VIDEO -->
+  <div id="videoBox" class="hidden">
+    <video id="video" autoplay muted></video>
+    <canvas id="overlay"></canvas>
+  </div>
+
+  <!-- BOUTON -->
+  <button id="joinBtn">Rejoindre la salle →</button>
+
+  <!-- CONFIDENTIALITÉ -->
+  <div class="privacy">
+    🔒 Les données webcam sont traitées localement.  
+    Aucune image n’est enregistrée.
+  </div>
+
+</div>
+
+<script src="rejoindresalle.js"></script>
+</body>
+</html>

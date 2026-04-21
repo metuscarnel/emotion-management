@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Page d'accueil</title>
+    <link rel="stylesheet" href="accueil.css">
+</head>
+<body>
+    <!-- HERO -->
+    <header class="hero">
+        <div class="hero-content">
+            <h1>Emotion Monitoring Platform</h1>
+            <p><em>Observer et comprendre les émotions lors des activités pédagogiques</em></p>
+            <div class="role-text">
+            Choisissez votre rôle pour commencer…
+        </div>
+        </div>
+    </header>
+
+    <!-- ROLES -->
+    <section class="roles">
+        <div class="role-card">
+            <div class="icon">🎓</div>
+            <h2>Professeur</h2>
+            <p>Créer une activité et recevoir le bilan émotionnel global des étudiants.</p>
+            <a href="creesalle.html" class="btn primary">Créer une salle</a>
+        </div>
+
+        <div class="role-card">
+            <div class="icon">👤</div>
+            <h2>Étudiant</h2>
+            <p>Participer à une activité et partager son ressenti émotionnel.</p>
+            <a href="access.html" class="btn outline">Rejoindre une salle</a>
+        </div>
+    </section>
+
+    <!-- HOW IT WORKS -->
+    <section class="steps">
+        <h2>Comment ça fonctionne ?</h2>
+
+        <div class="step-list">
+            <div class="step">
+                <span>1</span>
+                <p>Le professeur crée une salle</p>
+            </div>
+            <div class="step">
+                <span>2</span>
+                <p>Les étudiants participent (questionnaires / webcam)</p>
+            </div>
+            <div class="step">
+                <span>3</span>
+                <p>Bilan global anonyme en fin d’activité</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- PRIVACY -->
+    <section class="privacy">
+        <p>
+            🔒 Consentement explicite • Webcam optionnelle • Données anonymisées • Aucune image conservée
+        </p>
+    </section>
+
+    <!-- FOOTER -->
+    <footer>
+        © 2026 — Projet L2T1 — Université Paris Cité
+    </footer>
+    <script>
+        // Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyCWJbAzt5FdLrIuf4enDsDnerTyc4Rvi6w",
+  authDomain: "mesure-emotion.firebaseapp.com",
+  projectId: "mesure-emotion",
+  storageBucket: "mesure-emotion.firebasestorage.app",
+  messagingSenderId: "494486891636",
+  appId: "1:494486891636:web:016b34146e07933824b521",
+  measurementId: "G-NTLGPV5BWG"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
+    </script>
+</body>
+</html>

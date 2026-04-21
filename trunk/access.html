@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Rejoindre une salle</title>
+  <link rel="stylesheet" href="acces.css">
+</head>
+<body>
+
+<header class="hero">
+  <h1>Emotion Monitoring Platform</h1>
+  <p><em>Rejoindre une salle d’activité pédagogique</em></p>
+</header>
+
+<main class="container">
+  <form id="joinForm" novalidate>
+
+    <h2>Identification de l’étudiant</h2>
+
+    <div class="radio-group">
+      <label>
+        <input type="radio" name="mode" value="anonymous" checked>
+        Anonyme
+      </label>
+      <label>
+        <input type="radio" name="mode" value="named">
+        Non anonyme
+      </label>
+    </div>
+
+    <!-- ANONYME -->
+    <div class="block" id="anonymousBlock">
+      <input type="text" placeholder="Nom">
+      <input type="text" placeholder="Prénoms">
+      <input type="email" value="abc12345@anonyme.com" disabled>
+      <small><em>Vous pouvez utiliser un autre identifiant pour préserver votre anonymat</em></small>
+    </div>
+
+    <!-- NON ANONYME -->
+    <div class="block disabled" id="namedBlock">
+      <input type="text" id="studentNumber" placeholder="Numéro étudiant (8 chiffres)">
+      <div class="row">
+        <input type="text" placeholder="Nom">
+        <input type="text" placeholder="Prénoms">
+      </div>
+      <input type="email" id="studentEmail" placeholder="prenom.nom@etu.u-paris.fr">
+      <small><em>Vos données sont stockées en toute sécurité et ne seront utilisées que pour vous aider</em></small>
+    </div>
+
+    <h2>Informations de la salle</h2>
+
+    <div class="block">
+      <input type="text" id="teacherName" placeholder="Nom du professeur">
+      <input type="text" id="roomCode" placeholder="Code de la salle (8 caractères)">
+    </div>
+
+    <p class="error" id="errorMsg"></p>
+
+    <button type="submit" class="btn-main"> Rejoindre la salle</button> 
+
+  </form>
+</main>
+
+<footer>
+  <span>🔒 Consentement explicite</span> •
+  <span>Webcam optionnelle</span> •
+  <span>Données anonymisées</span>
+</footer>
+
+<script type="module" src="access.js"></script>
+</body>
+</html>
