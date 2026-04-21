@@ -270,6 +270,128 @@ main { padding-bottom: 40px; }
 .option-tag.on  { background: var(--success-bg); color: var(--success); }
 .option-tag.off { background: #fee2e2; color: #991b1b; }
 
+.kpi-grid {
+    margin-top: 14px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+}
+
+.kpi-card {
+    background: var(--neutral-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.kpi-card-accent {
+    background: #fdf2f6;
+    border-color: #f4c7d4;
+}
+
+.kpi-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+    color: var(--text-light);
+}
+
+.kpi-value {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--wine-main);
+}
+
+.progress-block {
+    margin-top: 14px;
+}
+
+.progress-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+    margin-bottom: 6px;
+}
+
+.progress-track {
+    width: 100%;
+    height: 11px;
+    border-radius: 999px;
+    background: #e2e8f0;
+    overflow: hidden;
+}
+
+.progress-bar {
+    width: 0%;
+    height: 100%;
+    background: linear-gradient(135deg, #1a7a4a, #3ecf7a);
+    transition: width 0.35s ease;
+}
+
+.comparison-box {
+    margin-top: 12px;
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid #dbeafe;
+    background: #eff6ff;
+    color: #1e3a8a;
+    font-size: 13px;
+}
+
+.emotion-board {
+    margin-top: 14px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+    background: #fff;
+}
+
+.emotion-board h3 {
+    margin: 0 0 8px;
+    font-size: 14px;
+    color: var(--wine-main);
+}
+
+.emotion-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.emotion-row {
+    display: grid;
+    grid-template-columns: 120px 1fr 60px;
+    gap: 8px;
+    align-items: center;
+    font-size: 12px;
+}
+
+.emotion-label {
+    font-weight: 600;
+    color: #334155;
+}
+
+.emotion-track {
+    height: 8px;
+    border-radius: 999px;
+    background: #e2e8f0;
+    overflow: hidden;
+}
+
+.emotion-fill {
+    height: 100%;
+    background: linear-gradient(135deg, #9f1239, #fb7185);
+}
+
+.emotion-value {
+    text-align: right;
+    color: #475569;
+}
+
 /* ===== Bouton lancer ===== */
 .btn-lancer {
     display: block;

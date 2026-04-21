@@ -1,4 +1,4 @@
-import { auth, db, ref, set, ensureAuth } from "./firebase-config.js";
+import { auth, db, ref, set, push, ensureAuth } from "./firebase-config.js";
 
 const emailInput = document.getElementById("email");
 const submitBtn = document.getElementById("submitBtn");
@@ -65,13 +65,15 @@ submitBtn.addEventListener("click", async (event) => {
     event.preventDefault();
     try {
       const user = await ensureAuth();
-      const teacherRef = ref(db, `teachers/${user.uid}`);
+      const teachersRef = ref(db, "teachers");
+      const teacherRef = push(teachersRef);
 
       await set(teacherRef, {
         nom: document.getElementById("nom")?.value.trim() || "",
         prenom: document.getElementById("prenom")?.value.trim() || "",
         email: emailInput.value.trim(),
         matiere: document.getElementById("matiere")?.value.trim() || "",
+        teacherId: teacherRef.key || "",
         uid: auth.currentUser?.uid || user.uid,
         createdAt: Date.now()
       });

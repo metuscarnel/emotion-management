@@ -12,11 +12,14 @@
 
   <h1>Rejoindre une salle</h1>
   <p class="subtitle">Entrez le code fourni par votre enseignant</p>
+  <div id="activityStatusBanner" class="activity-status-banner" aria-live="polite">
+    En attente du démarrage de l'activité par le professeur.
+  </div>
 
   <!-- CODE SALLE -->
   <label>Code de la salle</label>
-  <input type="text" id="roomCode" placeholder="CODE À 8 CARACTÈRES" maxlength="8">
-  <small id="codeError" class="error"></small>
+  <input type="text" id="roomCode" placeholder="CODE ABCD1234" maxlength="8">
+  <small id="codeError" class="status-message"></small>
 
   <!-- WEBCAM SETTINGS -->
   <h2>Paramètres webcam</h2>

@@ -25,7 +25,8 @@
                     </button>
                 </div>
                 <div class="statut-live">
-                    <span class="dot-live"></span> En attente
+                    <span class="dot-live"></span>
+                    <span id="liveStatusText">En attente</span>
                 </div>
             </div>
         </div>
@@ -88,6 +89,48 @@
 
             <!-- Options activées -->
             <div class="options-actives" id="optionsActives"></div>
+
+            <div class="kpi-grid" id="kpiGrid">
+                <div class="kpi-card">
+                    <span class="kpi-label">Participants</span>
+                    <span class="kpi-value" id="kpiParticipants">0</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-label">Questionnaires validés</span>
+                    <span class="kpi-value" id="kpiQuestionnaires">0</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-label">Score subjectif moyen</span>
+                    <span class="kpi-value" id="kpiSubjectif">—</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-label">Score objectif moyen</span>
+                    <span class="kpi-value" id="kpiObjectif">—</span>
+                </div>
+                <div class="kpi-card kpi-card-accent">
+                    <span class="kpi-label">Score global</span>
+                    <span class="kpi-value" id="kpiGlobal">—</span>
+                </div>
+            </div>
+
+            <div class="progress-block">
+                <div class="progress-head">
+                    <span>Progression des réponses</span>
+                    <strong id="progressLabel">0%</strong>
+                </div>
+                <div class="progress-track">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+            </div>
+
+            <div class="comparison-box" id="comparisonBox">
+                Comparaison en attente de données suffisantes.
+            </div>
+
+            <div class="emotion-board">
+                <h3>Répartition des émotions (temps réel)</h3>
+                <div id="emotionRows" class="emotion-rows"></div>
+            </div>
 
             <!-- Bouton lancer -->
             <button class="btn btn-lancer" type="button" id="btnLancer"

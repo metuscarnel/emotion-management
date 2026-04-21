@@ -11,6 +11,10 @@ function normalize(value) {
   return (value || "").trim().toLowerCase();
 }
 
+function isValidRoomCode(value) {
+  return /^[A-Z]{4}\d{4}$/.test((value || "").trim().toUpperCase());
+}
+
 function readTeachersOnce() {
   return new Promise((resolve, reject) => {
     const teachersRef = ref(db, "teachers");
@@ -83,7 +87,19 @@ loginBtn.addEventListener("click", async (event) => {
     localStorage.setItem("currentTeacherEmail", teacherData?.email || "");
     localStorage.setItem("currentTeacherMatiere", teacherData?.matiere || "");
 
-    window.location.href = "create.html";
+    const teacherDisplayName = [teacherData?.prenom, teacherData?.nom].filter(Boolean).join(" ").trim();
+    if (teacherDisplayName) {
+      localStorage.setItem("currentTeacherDisplayName", teacherDisplayName);
+    }
+
+    const lastRoomCode = (teacherData?.lastRoomCode || "").trim().toUpperCase();
+    if (isValidRoomCode(lastRoomCode)) {
+      localStorage.setItem("currentRoomCode", lastRoomCode);
+      window.location.href = `salle.html?room=${encodeURIComponent(lastRoomCode)}`;
+      return;
+    }
+
+    window.location.href = "create.html?new=1";
   } catch (error) {
     console.error(error);
     loginError.textContent = getFirebaseErrorMessage(error);

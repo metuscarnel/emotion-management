@@ -1,11 +1,38 @@
-import { db, ref, onValue, ensureAuth } from "./firebase-config.js";
+import { db, ref, onValue, ensureAuth, get } from "./firebase-config.js";
 
 const list = document.getElementById("participantsList");
 const summary = document.getElementById("summary");
 const totalCount = document.getElementById("totalCount");
 
-const params = new URLSearchParams(window.location.search);
-const roomCode = params.get("room") || localStorage.getItem("currentRoomCode") || "TEST124A";
+function logFirebase(message, type = "info") {
+  const prefix = `[Firebase][WAITING][${type.toUpperCase()}]`;
+  if (type === "error") {
+    console.error(prefix, message);
+    return;
+  }
+  if (type === "success") {
+    console.log(prefix, message);
+    return;
+  }
+  console.info(prefix, message);
+}
+
+function resolveRoomId() {
+  const params = new URLSearchParams(window.location.search);
+  const fromUrl = (params.get("room") || "").trim();
+  if (fromUrl) return fromUrl;
+
+  const fromStorage = (localStorage.getItem("currentRoomCode") || "").trim();
+  if (fromStorage) return fromStorage;
+
+  const titleCode = (document.getElementById("roomCode")?.textContent || "").trim();
+  if (titleCode) return titleCode;
+
+  return "TEMP1234";
+}
+
+const roomId = resolveRoomId();
+let professorDisplayName = localStorage.getItem("currentTeacherDisplayName") || "Professeur";
 
 function getLastLabel(timestamp) {
   if (!timestamp) return "il y a un instant";
@@ -51,21 +78,68 @@ function renderParticipants(participantsArray) {
     list.appendChild(div);
   });
 
-  summary.textContent = `→ ${connectedCount} participants connectés | Dernière activité : ${new Date().toLocaleTimeString()}`;
+  summary.textContent = `→ ${connectedCount} participants connectés | Professeur : ${professorDisplayName} | Dernière activité : ${new Date().toLocaleTimeString()}`;
   totalCount.textContent = String(participantsArray.length);
+}
+
+async function loadRoomMeta() {
+  try {
+    const snap = await get(ref(db, `rooms/${roomId}/meta`));
+    if (!snap.exists()) {
+      logFirebase(`Meta salle absente pour ${roomId}`, "error");
+      return;
+    }
+
+    const meta = snap.val() || {};
+    professorDisplayName = meta.createdByName || meta.teacherName || localStorage.getItem("currentTeacherDisplayName") || "Professeur";
+
+    if ((professorDisplayName === meta.createdBy || professorDisplayName === "Professeur") && meta.createdBy) {
+      try {
+        const teacherSnap = await get(ref(db, `teachers/${meta.createdBy}`));
+        if (teacherSnap.exists()) {
+          const teacher = teacherSnap.val() || {};
+          professorDisplayName = [teacher.prenom, teacher.nom].filter(Boolean).join(" ").trim() || teacher.nom || meta.createdBy;
+          localStorage.setItem("currentTeacherDisplayName", professorDisplayName);
+        }
+      } catch (teacherError) {
+        logFirebase(`Echec lecture profil professeur: ${teacherError?.code || teacherError?.message || teacherError}`, "error");
+      }
+    }
+
+    if (!professorDisplayName || professorDisplayName === meta.createdBy) {
+      professorDisplayName = localStorage.getItem("currentTeacherDisplayName") || "Professeur";
+    }
+
+    document.title = `Salle d'attente — ${roomId}`;
+    logFirebase(`Profil professeur resolu: ${professorDisplayName}`, "success");
+  } catch (error) {
+    logFirebase(`Echec lecture meta salle: ${error?.code || error?.message || error}`, "error");
+  }
 }
 
 async function startRealtimeParticipants() {
   try {
+    logFirebase(`Demarrage suivi presence salle=${roomId}`);
+    logFirebase("Tentative de connexion Auth anonyme...");
     await ensureAuth();
+    logFirebase("Connexion Auth OK", "success");
 
-    const participantsRef = ref(db, `rooms/${roomCode}/participants`);
+    await loadRoomMeta();
+
+    const participantsRef = ref(db, `rooms/${roomId}/participants`);
+    logFirebase(`Abonnement temps reel: rooms/${roomId}/participants`);
+
     onValue(participantsRef, (snapshot) => {
       const data = snapshot.val();
       const participantsArray = data ? Object.values(data) : [];
+      logFirebase(`Presence mise a jour: ${participantsArray.length} participant(s)`, "success");
       renderParticipants(participantsArray);
+    }, (error) => {
+      logFirebase(`Echec abonnement presence: ${error?.code || error?.message || error}`, "error");
+      summary.textContent = "→ Erreur de chargement des participants";
     });
   } catch (error) {
+    logFirebase(`Echec connexion/lecture: ${error?.code || error?.message || error}`, "error");
     console.error(error);
     summary.textContent = "→ Erreur de chargement des participants";
   }

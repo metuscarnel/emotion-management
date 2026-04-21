@@ -8,6 +8,23 @@ const studentEmail = document.getElementById("studentEmail");
 const roomCode = document.getElementById("roomCode");
 const errorMsg = document.getElementById("errorMsg");
 
+function logFirebase(message, type = "info") {
+  const prefix = `[Firebase][ACCESS][${type.toUpperCase()}]`;
+  if (type === "error") {
+    console.error(prefix, message);
+    return;
+  }
+  if (type === "success") {
+    console.log(prefix, message);
+    return;
+  }
+  console.info(prefix, message);
+}
+
+function logAudit(message) {
+  console.info(`[AUDIT] ${message}`);
+}
+
 function getFirebaseErrorMessage(error) {
   const code = error?.code || "";
   const message = error?.message || "";
@@ -35,6 +52,14 @@ function getFirebaseErrorMessage(error) {
   return `Impossible d'enregistrer la participation (${code || "erreur inconnue"}). ${message}`.trim();
 }
 
+function normalizeRoomCode(value) {
+  return (value || "").trim().toUpperCase();
+}
+
+function isValidRoomCode(value) {
+  return /^[A-Z]{4}\d{4}$/.test(value);
+}
+
 document.querySelectorAll('input[name="mode"]').forEach(radio => {
   radio.addEventListener("change", () => {
     if (radio.value === "anonymous" && radio.checked) {
@@ -52,6 +77,8 @@ document.getElementById("joinForm").addEventListener("submit", async e => {
   e.preventDefault();
   errorMsg.textContent = "";
 
+  roomCode.value = normalizeRoomCode(roomCode.value);
+
   // Numéro étudiant : 8 chiffres
   if (!namedBlock.classList.contains("disabled")) {
     if (!/^\d{8}$/.test(studentNumber.value)) {
@@ -66,29 +93,29 @@ document.getElementById("joinForm").addEventListener("submit", async e => {
     }
   }
 
-  // Code salle : 8 caractères
-  if (!/^.{8}$/.test(roomCode.value)) {
-    errorMsg.textContent = "Le code de la salle doit contenir exactement 8 caractères.";
-    return;
-  }
-
-  // Firebase Realtime Database interdit ces caractères dans les clés: . # $ [ ] /
-  if (/[.#$\[\]/]/.test(roomCode.value)) {
-    errorMsg.textContent = "Le code de la salle doit contenir 8 caractères sans . # $ [ ] /.";
+  // Code salle : 4 lettres + 4 chiffres
+  if (!isValidRoomCode(roomCode.value)) {
+    errorMsg.textContent = "Le code de la salle doit contenir 4 lettres suivies de 4 chiffres (ex: ABCD1234).";
     return;
   }
 
   try {
+    logFirebase("Tentative de connexion Auth anonyme...");
     const user = await ensureAuth();
+    logFirebase(`Connexion Auth OK (uid=${user.uid})`, "success");
+
     const isNamed = !namedBlock.classList.contains("disabled");
     const teacherName = (document.getElementById("teacherName")?.value || "").trim();
-    const roomCodeValue = roomCode.value.trim();
+    const roomId = roomCode.value.trim();
 
-    const roomMetaRef = ref(db, `rooms/${roomCodeValue}/meta`);
+    logFirebase(`Lecture meta salle rooms/${roomId}/meta ...`);
+    const roomMetaRef = ref(db, `rooms/${roomId}/meta`);
     const roomMetaSnapshot = await get(roomMetaRef);
+    logFirebase(`Lecture meta salle OK (exists=${roomMetaSnapshot.exists()})`, "success");
 
     if (!roomMetaSnapshot.exists()) {
       errorMsg.textContent = "Cette salle n'existe pas. Verifiez le code fourni par votre professeur.";
+      logFirebase(`Salle inexistante: ${roomId}`, "error");
       return;
     }
 
@@ -112,16 +139,21 @@ document.getElementById("joinForm").addEventListener("submit", async e => {
       joinedAt: Date.now()
     };
 
-    const participantsRef = ref(db, `rooms/${roomCodeValue}/participants`);
+    const participantsRef = ref(db, `rooms/${roomId}/participants`);
     const newParticipantRef = push(participantsRef);
-    await set(newParticipantRef, payload);
 
-    localStorage.setItem("currentRoomCode", roomCodeValue);
+    logFirebase(`Ecriture participant dans rooms/${roomId}/participants/${newParticipantRef.key} ...`);
+    await set(newParticipantRef, payload);
+    logFirebase(`Participant enregistre (key=${newParticipantRef.key})`, "success");
+    logAudit("Enregistrement participant en salle : conforme au besoin de collecte de donnees (CDC 6.1/6.2). ");
+
+    localStorage.setItem("currentRoomCode", roomId);
     localStorage.setItem("currentParticipantKey", newParticipantRef.key || "");
 
-    window.location.href = `rejoindresalle.html?room=${encodeURIComponent(roomCodeValue)}`;
+    window.location.href = `rejoindresalle.html?room=${encodeURIComponent(roomId)}`;
   } catch (error) {
     errorMsg.textContent = getFirebaseErrorMessage(error);
+    logFirebase(`Echec connexion/transfert: ${error?.code || error?.message || error}`, "error");
     console.error(error);
     return;
   }
