@@ -6,8 +6,10 @@ import {
   ref,
   set,
   push,
+  update,
   onValue,
-  get
+  get,
+  onDisconnect
 } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-database.js";
 
 const firebaseConfig = {
@@ -58,7 +60,9 @@ export {
   ref,
   set,
   push,
+  update,
   onValue,
   get,
+  onDisconnect,
   ensureAuth
 };

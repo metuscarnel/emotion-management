@@ -160,3 +160,271 @@ button{
   font-size:12px;
   color:#555;
 }
+
+/* DÉTECTION D'ÉMOTIONS */
+#detectionPanel {
+  margin-top: 20px;
+  padding: 20px;
+  border: 2px solid var(--vin);
+  border-radius: 16px;
+  background: linear-gradient(135deg, #fef2f6, #f7eef2);
+}
+
+.detection-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  border-bottom: 2px solid var(--vin);
+  padding-bottom: 10px;
+}
+
+.detection-header h2 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--vin);
+}
+
+.timer {
+  font-size: 18px;
+  font-weight: bold;
+  color: var(--vin);
+}
+
+.dominant-emotion {
+  text-align: center;
+  margin: 15px 0;
+  padding: 15px;
+  background: white;
+  border-radius: 12px;
+  border: 2px solid #e2e8f0;
+}
+
+.dominant-emotion p {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.emotion-large {
+  font-size: 48px;
+  font-weight: bold;
+  color: var(--vin);
+}
+
+.emotion-stats {
+  margin: 20px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.stat-row {
+  display: grid;
+  grid-template-columns: 80px 1fr 45px;
+  gap: 10px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.stat-row span:first-child {
+  font-weight: 600;
+  color: var(--vin-dark);
+}
+
+.stat-row span:last-child {
+  text-align: right;
+  font-weight: bold;
+  color: var(--vin);
+  min-width: 45px;
+}
+
+.stat-bar {
+  background: #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+  height: 20px;
+}
+
+.stat-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--vin), #c1003a);
+  transition: width 0.3s ease;
+}
+
+#endDetectionBtn {
+  margin-top: 15px;
+  background: linear-gradient(135deg, var(--vin), var(--vin-dark));
+  width: 100%;
+  padding: 12px;
+  border-radius: 12px;
+  color: white;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+#endDetectionBtn:hover {
+  opacity: 0.9;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* RÉSULTATS ÉMOTIONS */
+#resultsPanel {
+  margin-top: 20px;
+  padding: 25px;
+  border: 2px solid var(--vin);
+  border-radius: 16px;
+  background: linear-gradient(135deg, #fef2f6, #f7eef2);
+}
+
+.results-header {
+  text-align: center;
+  margin-bottom: 25px;
+  border-bottom: 3px solid var(--vin);
+  padding-bottom: 15px;
+}
+
+.results-header h2 {
+  margin: 0 0 5px;
+  font-size: 24px;
+  color: var(--vin);
+}
+
+.results-header p {
+  margin: 0;
+  font-size: 14px;
+  color: #666;
+}
+
+/* STATS CARDS */
+.results-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 15px;
+  margin-bottom: 25px;
+}
+
+.stat-card {
+  background: white;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 15px;
+  text-align: center;
+}
+
+.stat-label {
+  display: block;
+  font-size: 12px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+
+.stat-value {
+  display: block;
+  font-size: 20px;
+  font-weight: bold;
+  color: var(--vin);
+}
+
+/* CHART */
+.results-chart {
+  margin: 25px 0;
+  padding: 20px;
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.results-chart h3 {
+  margin: 0 0 15px;
+  font-size: 16px;
+  color: var(--vin);
+}
+
+.chart-container {
+  width: 100%;
+  height: 300px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* TABLE */
+.results-table {
+  margin: 25px 0;
+  padding: 20px;
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.results-table h3 {
+  margin: 0 0 15px;
+  font-size: 16px;
+  color: var(--vin);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+table th {
+  background: linear-gradient(135deg, var(--vin), #c1003a);
+  color: white;
+  padding: 12px;
+  text-align: left;
+  font-weight: 600;
+  border-radius: 8px 8px 0 0;
+}
+
+table td {
+  padding: 12px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+table tbody tr:hover {
+  background: #f8f9fa;
+}
+
+/* BOUTONS ACTIONS */
+.results-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+  margin-top: 20px;
+}
+
+.btn-secondary {
+  padding: 12px;
+  border: 2px solid var(--vin);
+  border-radius: 12px;
+  background: white;
+  color: var(--vin);
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+.btn-secondary:hover {
+  background: var(--vin);
+  color: white;
+  transform: translateY(-2px);
+}

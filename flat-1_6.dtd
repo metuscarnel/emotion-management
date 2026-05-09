@@ -1,0 +1,213 @@
+<!ELEMENT nta (imports?, declaration?, template*, lsc*, instantiation?, system, simulator?, queries?)>
+<!ELEMENT project (imports?, declaration?, template*, lsc*, instantiation?, system, simulator?, queries?)>
+<!ELEMENT imports (#PCDATA)>
+<!ELEMENT declaration (#PCDATA)>
+<!ELEMENT template (name, parameter?, declaration?, location*, branchpoint*, init?, transition*)>
+<!ELEMENT name (#PCDATA)>
+<!ATTLIST name x   CDATA #IMPLIED
+	y   CDATA #IMPLIED>
+<!ELEMENT parameter (#PCDATA)>
+<!ATTLIST parameter x   CDATA #IMPLIED
+	y   CDATA #IMPLIED>
+<!ELEMENT location (name?, label*, urgent?, committed?)>
+<!ATTLIST location id ID #REQUIRED
+	x  CDATA #IMPLIED
+	y  CDATA #IMPLIED
+	color CDATA #IMPLIED>
+<!ELEMENT branchpoint EMPTY>
+<!ATTLIST branchpoint id ID #REQUIRED
+	x  CDATA #IMPLIED
+	y  CDATA #IMPLIED>
+<!ELEMENT init EMPTY>
+<!ATTLIST init ref IDREF #IMPLIED>
+<!ELEMENT urgent EMPTY>
+<!ELEMENT committed EMPTY>
+<!ELEMENT transition (source, target, label*, nail*)>
+<!ATTLIST transition id  ID #IMPLIED
+	x   CDATA #IMPLIED
+	y   CDATA #IMPLIED
+	color CDATA #IMPLIED>
+<!ELEMENT edge (source, target, label*, nail*)>
+<!ATTLIST edge id  ID #IMPLIED
+	x   CDATA #IMPLIED
+	y   CDATA #IMPLIED
+	color CDATA #IMPLIED>
+<!ELEMENT source EMPTY>
+<!ATTLIST source ref IDREF #REQUIRED>
+<!ELEMENT target EMPTY>
+<!ATTLIST target ref IDREF #REQUIRED>
+<!ELEMENT label (#PCDATA)>
+<!ATTLIST label	kind CDATA #REQUIRED
+	x    CDATA #IMPLIED
+	y    CDATA #IMPLIED>
+<!ELEMENT nail EMPTY>
+<!ATTLIST nail x   CDATA #REQUIRED
+	y   CDATA #REQUIRED>
+
+<!-- LSC template -->
+<!ELEMENT lsc (name, parameter?, type, mode, declaration?, yloccoord+, instance+, prechart?, message*, condition*, update*, cut*, scope*, coregion*, subchart*, loop*, ifthenelse*)>
+<!-- type: existential | universal -->
+<!ELEMENT type (#PCDATA)>
+<!ATTLIST type      x   CDATA #IMPLIED
+	y   CDATA #IMPLIED>
+<!-- mode: initial | iterative | invariant -->
+<!ELEMENT mode (#PCDATA)>
+<!ATTLIST mode      x   CDATA #IMPLIED
+	y   CDATA #IMPLIED>
+<!-- role: specification | property -->
+<!ELEMENT role (#PCDATA)>
+<!ATTLIST role      x   CDATA #IMPLIED
+	y   CDATA #IMPLIED>
+<!-- yloccoord: Y coordinate for location on all instances (same loc number => same Y coord) -->
+<!ELEMENT yloccoord EMPTY>
+<!ATTLIST yloccoord number CDATA #REQUIRED
+	y      CDATA #REQUIRED>
+<!-- instance: carries unique ID, label(which can change during run), and temperatures of the locations -->
+<!ELEMENT instance (name)>
+<!ATTLIST instance id ID #REQUIRED
+	x  CDATA #REQUIRED
+	y  CDATA #IMPLIED>
+<!-- temperature = hot | cold, identified by location_number (or, if location numbers not present, count from 1 on) -->
+<!ELEMENT temperature (#PCDATA)>
+<!ATTLIST temperature y CDATA #IMPLIED>
+<!-- message: refs of src, trg instances; location; label=name -->
+<!ELEMENT message (source, target, lsclocation, label)>
+<!ATTLIST message    id  ID #IMPLIED
+	x   CDATA #IMPLIED
+	y   CDATA #IMPLIED
+	color CDATA #IMPLIED>
+<!-- source points to ID of instance line -->
+<!-- target points to ID of instance line -->
+<!ELEMENT lsclocation (#PCDATA)>
+<!-- anchor refers to instance ID and optionally carries the location number (y)-->
+<!ELEMENT anchor EMPTY>
+<!ATTLIST anchor     instanceid IDREF #REQUIRED
+	y CDATA #IMPLIED>
+<!-- condition: anchors+ (= {x,y} with y being the same);  temperature; label=expression -->
+<!ELEMENT condition (anchor+, lsclocation, temperature, label)>
+<!ATTLIST condition  id  ID #IMPLIED
+	x   CDATA #IMPLIED
+	y   CDATA #IMPLIED
+	color CDATA #IMPLIED>
+<!-- update: anchor; location; label=expression -->
+<!ELEMENT update (anchor, lsclocation, label)>
+<!ATTLIST update     id  ID #IMPLIED
+	x   CDATA #IMPLIED
+	y   CDATA #IMPLIED
+	color CDATA #IMPLIED>
+<!-- prechart: spans over ALL instances by default, only need to specify its bottom location -->
+<!ELEMENT prechart  (lsclocation)>
+<!ATTLIST prechart   id  ID #IMPLIED
+	x   CDATA #IMPLIED
+	y   CDATA #IMPLIED
+	color CDATA #IMPLIED>
+<!-- the following LSC constructs are deemed optional - may be ignored in the first version of LSC editor -->
+<!-- cut: nothing but a set of anchors (=pair {x,y}) -->
+<!ELEMENT cut  (anchor+)>
+<!ATTLIST cut  id  ID #IMPLIED
+	x   CDATA #IMPLIED
+	y   CDATA #IMPLIED
+	color CDATA #IMPLIED>
+<!-- scope: upper & lower locations, temperature; reference to the IDs of 2 cuts -->
+<!ELEMENT scope (lsclocation, lsclocation, temperature)>
+<!ATTLIST scope      id  ID #IMPLIED
+	x   CDATA #IMPLIED
+	y   CDATA #IMPLIED
+	cut1ref IDREF #REQUIRED
+	cut2ref IDREF #REQUIRED
+	color CDATA #IMPLIED>
+<!-- coregion: instance (by anchor(s)), locations deduced from anchors -->
+<!ELEMENT coregion (anchor, anchor)>
+<!ATTLIST coregion   id  ID #IMPLIED
+	x   CDATA #IMPLIED
+	y   CDATA #IMPLIED
+	color CDATA #IMPLIED>
+<!-- loop: anchors over instances, upper and lower location, and label=expression -->
+<!ELEMENT loop (anchor+, lsclocation, lsclocation, label)>
+<!ATTLIST loop       id  ID #IMPLIED
+	x   CDATA #IMPLIED
+	y   CDATA #IMPLIED
+	color CDATA #IMPLIED>
+<!-- subchart: anchors over instances, upper and lower location -->
+<!ELEMENT subchart   (anchor+, lsclocation, lsclocation)>
+<!ATTLIST subchart   id  ID #IMPLIED
+	x   CDATA #IMPLIED
+	y   CDATA #IMPLIED
+	color CDATA #IMPLIED>
+<!-- ifThenElse: anchors over instances, top/middle/bottom locations and label=expression -->
+<!ELEMENT ifthenelse (anchor+, lsclocation, lsclocation, lsclocation, label)>
+<!ATTLIST ifthenelse id  ID #IMPLIED
+	x   CDATA #IMPLIED
+	y   CDATA #IMPLIED
+	color CDATA #IMPLIED>
+
+<!ELEMENT instantiation (#PCDATA)>
+<!ELEMENT system (#PCDATA)>
+
+<!ELEMENT simulator (plot-widget*)>
+<!ATTLIST simulator
+	type CDATA #REQUIRED>
+<!ELEMENT plot-widget (expression+)>
+<!ATTLIST plot-widget
+	title CDATA #REQUIRED>
+<!ELEMENT expression (#PCDATA)>
+
+<!-- verifier part of the document -->
+<!ELEMENT queries (option*,query*)>
+<!-- verification options -->
+<!ELEMENT option EMPTY>
+<!ATTLIST option
+	key CDATA #REQUIRED
+	value CDATA #REQUIRED>
+<!ELEMENT query (formula,comment,option*,expect?,result*)>
+<!ELEMENT formula (#PCDATA)>
+<!ELEMENT comment (#PCDATA)>
+<!--
+    Validation/testing: expect tag describes the expected results given the resource limits.
+    Quality type values: satisfied, not satisfied, maybe satisfied, etc see also hypothesis testing
+    Quantity type values: numerical value, e.g. infimum, supremum, probability
+    Note: interval type is omitted as the expected value should be included into the result estimates.
+  -->
+<!ELEMENT expect (resource*)>
+<!ATTLIST expect
+	outcome (success|failure|error) #REQUIRED
+	type (quality|quantity) #REQUIRED
+	value CDATA #REQUIRED>
+<!-- the used/limited verification resources -->
+<!ELEMENT resource EMPTY>
+<!ATTLIST resource
+	type (stored-states|explored-states|runs|virtual-memory|resident-memory|user-time|kernel-time|elapsed-time) #REQUIRED
+	value CDATA #REQUIRED
+	unit (B|KB|MB|GB|TB|KiB|MiB|GiB|TiB|s|m|h|d) #IMPLIED>
+<!-- verification results from the query, also stores options for reproducibility -->
+<!ELEMENT result (option*,trace?,details?,samples?,plot*,resource*)>
+<!ATTLIST result
+	outcome (success|failure) #REQUIRED
+	type (quality|quantity|interval) #REQUIRED
+	value CDATA #IMPLIED
+	timestamp CDATA #IMPLIED>
+<!ELEMENT trace (#PCDATA)>
+<!-- generic (popup) message providing more context for the result -->
+<!ELEMENT details (#PCDATA)>
+<!-- raw set of numbers, e.g. for creating histogram plots -->
+<!ELEMENT samples (#PCDATA)>
+<!ATTLIST samples title CDATA #REQUIRED
+	encoding (csv|binary64-base64|binary64-gzip-base64) #REQUIRED>
+<!ELEMENT plot (series+,comment)>
+<!-- generic 2D plot -->
+<!ATTLIST plot
+	title CDATA #REQUIRED
+	xaxis CDATA #REQUIRED
+	yaxis CDATA #REQUIRED>
+<!-- sequence of 2D points, e.g. trajectory -->
+<!ELEMENT series (#PCDATA)>
+<!ATTLIST series
+	title CDATA #REQUIRED
+	type CDATA #IMPLIED
+	point (dot|diamond|triangle-up|triangle-down|triangle-left|triangle-right|rectangle|circle) #IMPLIED
+	line (solid|dashed|dotted|dash-dotted) #IMPLIED
+	area (bars|polygon) #IMPLIED
+	color CDATA #REQUIRED
+	encoding (csv|binary64-base64|binary64-gzip-base64) #IMPLIED
+	expr CDATA #IMPLIED>
+

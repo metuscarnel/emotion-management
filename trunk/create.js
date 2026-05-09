@@ -24,6 +24,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const mailBtn = document.getElementById("mailBtn");
   const waitingRoomLink = document.getElementById("waitingRoomLink");
   const followRoomLink = document.getElementById("followRoomLink");
+  const accessResultsBtn = document.getElementById("accessResultsBtn");
   const roomCode = document.getElementById("roomCode");
   const message = document.getElementById("copyMessage");
 
@@ -46,6 +47,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
     if (followRoomLink) {
       followRoomLink.href = `salle.html?room=${encodeURIComponent(code)}`;
+    }
+
+    if (accessResultsBtn) {
+      accessResultsBtn.href = `recapitulatif.html?room=${encodeURIComponent(code)}`;
     }
   };
 
@@ -131,9 +136,29 @@ document.addEventListener("DOMContentLoaded", function () {
     e.stopPropagation();
 
     const code = roomCode.innerText;
-    const subject = encodeURIComponent("Code de la salle");
+    const link = window.location.origin + window.location.pathname.replace("create.html", "access.html");
+    
+    const subject = encodeURIComponent("🎓 Rejoignez mon activité - Emotion Monitoring");
     const body = encodeURIComponent(
-      "Bonjour,\n\nVoici le code de la salle : " + code + "\n\nCordialement."
+      "Bonjour,\n\n" +
+      "Je vous invite à participer à une activité pédagogique interactive.\n\n" +
+      "📌 CODE DE LA SALLE : " + code + "\n\n" +
+      "🔗 LIEN D'ACCÈS : " + link + "\n\n" +
+      "📋 COMMENT PARTICIPER :\n" +
+      "1. Cliquez sur le lien ou allez sur la plateforme\n" +
+      "2. Choisissez votre mode de participation :\n" +
+      "   - 📷 Webcam (détection automatique des émotions)\n" +
+      "   - ❓ Questionnaire (5 questions)\n" +
+      "3. Entrez le code : " + code + "\n" +
+      "4. Suivez les instructions à l'écran\n\n" +
+      "💡 NOTES IMPORTANTES :\n" +
+      "• Assurez-vous que votre navigateur autorise l'accès à la webcam (si mode webcam)\n" +
+      "• Aucune image n'est conservée - tout se fait en temps réel et localement\n" +
+      "• Participation anonyme ou nominative selon votre choix\n\n" +
+      "Merci de votre participation !\n\n" +
+      "---\n" +
+      "Emotion Monitoring Platform\n" +
+      "Université Paris Cité"
     );
 
     window.location.href = "mailto:?subject=" + subject + "&body=" + body;

@@ -14,6 +14,58 @@ let questionnaireSection = null;
 let currentRoomId = "";
 let currentActivityStatus = "waiting";
 
+// Détection d'émotions
+let detectionActive = false;
+let detectionStartTime = null;
+let emotionHistory = [];
+let emotionStats = {
+  happy: 0, sad: 0, neutral: 0, angry: 0,
+  surprised: 0, fearful: 0, disgusted: 0
+};
+let detectionInterval = null;
+let faceApiReady = false;
+
+// === GESTION DE LA DÉCONNEXION ===
+async function markAsDisconnected() {
+  if (!firebaseApi) return;
+  
+  try {
+    const participantKey = localStorage.getItem("currentParticipantKey");
+    const roomId = localStorage.getItem("currentRoomCode");
+    
+    if (!participantKey || !roomId) return;
+    
+    const participantRef = firebaseApi.ref(firebaseApi.db, `rooms/${roomId}/participants/${participantKey}`);
+    await firebaseApi.update(participantRef, {
+      connected: false,
+      disconnectedAt: Date.now()
+    });
+    
+    logFirebase(`✓ Participant marqué comme déconnecté`, "success");
+    logAudit("Déconnexion participant enregistrée dans Firebase");
+  } catch (error) {
+    logFirebase(`Erreur lors de la déconnexion: ${error?.message}`, "error");
+  }
+}
+
+// Marquer comme déconnecté quand l'utilisateur quitte
+window.addEventListener("beforeunload", markAsDisconnected);
+window.addEventListener("pagehide", markAsDisconnected);
+
+// === GESTION DU BOUTON QUITTER ===
+async function handleLeaveRoom() {
+  await markAsDisconnected();
+  logFirebase("Redirection vers accueil après déconnexion", "success");
+  setTimeout(() => {
+    window.location.href = "accueil.html";
+  }, 300);
+}
+
+const leaveBtn = document.getElementById("leaveBtn");
+if (leaveBtn) {
+  leaveBtn.addEventListener("click", handleLeaveRoom);
+}
+
 function logFirebase(message, type = "info") {
   const prefix = `[Firebase][JOIN][${type.toUpperCase()}]`;
   if (type === "error") {
@@ -54,8 +106,109 @@ function defaultLikertOptions() {
     { label: "Un peu", score: 2 },
     { label: "Moyennement", score: 3 },
     { label: "Beaucoup", score: 4 },
-    { label: "Extremement", score: 5 }
+    { label: "Extrêmement", score: 5 }
   ];
+}
+
+// === BANQUE DE QUESTIONS SCIENTIFIQUES ===
+function getDefaultQuestionsBank() {
+  return [
+    {
+      id: "q001",
+      question: "Je me sens engagé(e) par cette activité pédagogique.",
+      options: defaultLikertOptions()
+    },
+    {
+      id: "q002",
+      question: "Les explications du professeur sont claires et compréhensibles.",
+      options: defaultLikertOptions()
+    },
+    {
+      id: "q003",
+      question: "Je suis concentré(e) sur la tâche en cours.",
+      options: defaultLikertOptions()
+    },
+    {
+      id: "q004",
+      question: "Cette activité me plaît beaucoup.",
+      options: defaultLikertOptions()
+    },
+    {
+      id: "q005",
+      question: "Je ressens de la confiance dans ma capacité à réussir.",
+      options: defaultLikertOptions()
+    },
+    {
+      id: "q006",
+      question: "J'ai l'impression de progresser et d'apprendre des choses nouvelles.",
+      options: defaultLikertOptions()
+    },
+    {
+      id: "q007",
+      question: "Je suis stressé(e) ou anxieux(se) en ce moment.",
+      options: defaultLikertOptions()
+    },
+    {
+      id: "q008",
+      question: "La difficulté de cette activité est adaptée à mon niveau.",
+      options: defaultLikertOptions()
+    },
+    {
+      id: "q009",
+      question: "Je me sens motivé(e) à poursuivre cette activité.",
+      options: defaultLikertOptions()
+    },
+    {
+      id: "q010",
+      question: "Je trouve cette activité ennuyeuse ou peu intéressante.",
+      options: defaultLikertOptions()
+    },
+    {
+      id: "q011",
+      question: "Je suis satisfait(e) de mes performances jusqu'à présent.",
+      options: defaultLikertOptions()
+    },
+    {
+      id: "q012",
+      question: "Les interactions avec les autres participants m'aident.",
+      options: defaultLikertOptions()
+    },
+    {
+      id: "q013",
+      question: "Je ressens de la frustration face aux difficultés rencontrées.",
+      options: defaultLikertOptions()
+    },
+    {
+      id: "q014",
+      question: "Cette activité me donne envie de poursuivre mes apprentissages.",
+      options: defaultLikertOptions()
+    },
+    {
+      id: "q015",
+      question: "Je suis bien à l'aise avec le format et les outils utilisés.",
+      options: defaultLikertOptions()
+    }
+  ];
+}
+
+// === SÉLECTION ALÉATOIRE (Fisher-Yates Shuffle) ===
+function shuffleArray(array) {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
+function selectRandomQuestions(allQuestions, count = 5) {
+  if (!allQuestions || allQuestions.length === 0) {
+    throw new Error("Aucune question disponible pour sélection aléatoire");
+  }
+
+  const shuffled = shuffleArray(allQuestions);
+  const selectedCount = Math.min(count, allQuestions.length);
+  return shuffled.slice(0, selectedCount);
 }
 
 function normalizeOptions(rawOptions) {
@@ -113,23 +266,48 @@ async function loadQuestions() {
     return questionnaireQuestions;
   }
 
-  logFirebase("Lecture des questions depuis /questions ...");
-  const questionsRef = firebaseApi.ref(firebaseApi.db, "questions");
-  const snapshot = await firebaseApi.get(questionsRef);
+  let allQuestionsBank = [];
 
-  if (!snapshot.exists()) {
-    throw new Error("Aucune question disponible dans Realtime Database (/questions)");
+  // Étape 1: Essayer de charger une banque de questions depuis Firebase
+  try {
+    logFirebase("📚 Tentative de chargement d'une banque de questions depuis Firebase...");
+    const questionsRef = firebaseApi.ref(firebaseApi.db, "questionsBank");
+    const snapshot = await firebaseApi.get(questionsRef);
+
+    if (snapshot.exists()) {
+      const rawBank = snapshot.val();
+      allQuestionsBank = normalizeQuestions(rawBank);
+      logFirebase(`✅ Banque Firebase chargée: ${allQuestionsBank.length} questions disponibles`, "success");
+    } else {
+      logFirebase("ℹ️ Pas de banque dans Firebase, utilisation des questions par défaut", "info");
+    }
+  } catch (fbError) {
+    logFirebase(`⚠️ Erreur lecture Firebase: ${fbError?.message}. Utilisation des questions par défaut.`, "error");
   }
 
-  questionnaireQuestions = normalizeQuestions(snapshot.val());
+  // Étape 2: Utiliser la banque par défaut si aucune depuis Firebase
+  if (allQuestionsBank.length === 0) {
+    allQuestionsBank = normalizeQuestions(getDefaultQuestionsBank());
+    logFirebase(`📋 Utilisation de la banque par défaut: ${allQuestionsBank.length} questions`, "success");
+  }
+
+  // Étape 3: Sélectionner aléatoirement 5 questions
+  const selectedCount = 5;
+  questionnaireQuestions = selectRandomQuestions(allQuestionsBank, selectedCount);
   questionnaireLoaded = true;
 
   if (!questionnaireQuestions.length) {
-    throw new Error("Le format des questions est invalide ou vide");
+    throw new Error("Impossible de sélectionner les questions aléatoires");
   }
 
-  logFirebase(`Questions chargees: ${questionnaireQuestions.length}`, "success");
-  logAudit("Mesure subjective par questionnaires : conforme CDC 6.3.1.2 (affichage + echelles + enregistrement + scoring subjectif).");
+  // Étape 4: Traçabilité scientifique - Enregistrer l'ordre des questions pour audit
+  const sessionId = `${currentRoomId}_${Date.now()}`;
+  const questionIds = questionnaireQuestions.map(q => q.id).join(", ");
+  logAudit(`[RIGUEUR SCIENTIFIQUE] Session ${sessionId} - Questions sélectionnées (aléatoires): ${questionIds}`);
+  
+  logFirebase(`✅ ${selectedCount} questions sélectionnées aléatoirement sur ${allQuestionsBank.length}`, "success");
+  logAudit("Mesure subjective aléatoire: conforme CDC 6.3.1.2 (sélection aléatoire pour rigueur scientifique, pas de biais de sélection).");
+  
   return questionnaireQuestions;
 }
 
@@ -267,6 +445,13 @@ async function saveQuestionnaire(roomId, payload) {
   const participantKey = localStorage.getItem("currentParticipantKey");
   const responseKey = participantKey || `anon_${Date.now()}`;
 
+  // Enregistrer l'ordre des questions pour traçabilité scientifique
+  const questionsUsed = questionnaireQuestions.map((q, idx) => ({
+    position: idx + 1,
+    id: q.id,
+    text: q.text
+  }));
+
   const responsesRef = firebaseApi.ref(firebaseApi.db, `rooms/${roomId}/questionnaires/${responseKey}`);
   logFirebase(`Ecriture questionnaire rooms/${roomId}/questionnaires/${responseKey} ...`);
 
@@ -277,10 +462,14 @@ async function saveQuestionnaire(roomId, payload) {
     submittedAt: Date.now(),
     totalScore: payload.totalScore,
     averageScore: payload.averageScore,
-    answers: payload.answers
+    answers: payload.answers,
+    // ✅ TRAÇABILITÉ: Enregistrer l'ordre exact des questions posées
+    questionsUsed: questionsUsed,
+    questionsCount: questionnaireQuestions.length
   });
 
-  logFirebase(`Questionnaire enregistre (score moyen=${payload.averageScore})`, "success");
+  logFirebase(`✅ Questionnaire enregistré (score moyen=${payload.averageScore}) avec ordre des questions`, "success");
+  logAudit(`Traçabilité scientifique: ${questionsUsed.length} questions enregistrées avec leurs positions pour audit`);
 
   if (participantKey) {
     const participantRef = firebaseApi.ref(firebaseApi.db, `rooms/${roomId}/participants/${participantKey}`);
@@ -324,8 +513,30 @@ async function openQuestionnaireFlow(roomId) {
           return;
         }
 
+        const submitBtn = form.querySelector("button[type='submit']");
+        if (submitBtn) {
+          submitBtn.textContent = "Enregistrement en cours...";
+          submitBtn.disabled = true;
+        }
+
         await saveQuestionnaire(roomId, result);
-        showInlineMessage(`Questionnaire enregistre. Score subjectif moyen: ${result.averageScore}/5`, false);
+        
+        const section = document.getElementById("dynamicQuestionnaire");
+        if (section) {
+          section.innerHTML = `
+            <div style="text-align: center; padding: 40px 20px;">
+              <div style="font-size: 60px; margin-bottom: 16px;">✅</div>
+              <h2 style="color: #10b981; margin-bottom: 10px; font-size: 24px;">Questionnaire validé !</h2>
+              <p style="color: #475569; font-size: 16px; margin-bottom: 25px; line-height: 1.5;">
+                Merci pour votre participation.<br>
+                Votre score subjectif moyen est de <strong>${result.averageScore}/5</strong>.
+              </p>
+              <button onclick="window.location.href='accueil.html'" style="background: #830c2a; color: white; padding: 12px 28px; border: none; border-radius: 25px; cursor: pointer; font-size: 15px; font-weight: 600; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">Terminer et quitter</button>
+            </div>
+          `;
+        }
+        
+        showInlineMessage(""); // Effacer tout message d'erreur précédent
         logAudit("Calcul automatique d'un score emotionnel subjectif : conforme CDC 6.3.1.2.");
       } catch (error) {
         logFirebase(`Echec enregistrement questionnaire: ${error?.code || error?.message || error}`, "error");
@@ -372,6 +583,22 @@ async function initFirebase() {
     logFirebase("Tentative de connexion Auth anonyme...");
     await firebaseApi.ensureAuth();
     logFirebase("Connexion Auth OK", "success");
+
+    // GESTION ROBUSTE DE LA PRÉSENCE (évite le bug lors du changement de page)
+    const participantKey = localStorage.getItem("currentParticipantKey");
+    const roomId = localStorage.getItem("currentRoomCode") || currentRoomId;
+    
+    if (participantKey && roomId) {
+      const participantRef = firebaseApi.ref(firebaseApi.db, `rooms/${roomId}/participants/${participantKey}`);
+      
+      const connectedRef = firebaseApi.ref(firebaseApi.db, ".info/connected");
+      firebaseApi.onValue(connectedRef, (snap) => {
+        if (snap.val() === true) {
+          firebaseApi.onDisconnect(participantRef).update({ connected: false });
+          firebaseApi.update(participantRef, { connected: true, updatedAt: Date.now() });
+        }
+      });
+    }
   } catch (error) {
     logFirebase(`Echec initialisation Firebase: ${error?.code || error?.message || error}`, "error");
     showInlineMessage("Connexion Firebase impossible pour le moment.", true);
@@ -436,12 +663,14 @@ async function saveJoinMode(roomId, mode) {
     if (participantKey) {
       const participantRef = firebaseApi.ref(firebaseApi.db, `rooms/${roomId}/participants/${participantKey}`);
       logFirebase(`Mise a jour participant rooms/${roomId}/participants/${participantKey} ...`);
+      
       await firebaseApi.set(participantRef, {
         ...(await (async () => {
           const snap = await firebaseApi.get(participantRef);
           return snap.exists() ? snap.val() : {};
         })()),
         roomId,
+        connected: true,
         participationMode: mode,
         updatedAt: Date.now()
       });
@@ -485,6 +714,14 @@ noCam.onclick = () => {
   useCamera = false;
   stopCamera();
 };
+
+/* BOUTON TERMINER DÉTECTION */
+document.addEventListener("DOMContentLoaded", () => {
+  const endDetectionBtn = document.getElementById("endDetectionBtn");
+  if (endDetectionBtn) {
+    endDetectionBtn.onclick = stopEmotionDetection;
+  }
+});
 
 /* VALIDATION CODE SALLE */
 roomCodeInput.addEventListener("input", () => {
@@ -530,10 +767,12 @@ document.getElementById("joinBtn").onclick = async () => {
     logAudit("Autorisation camera accordee : conforme CDC 6.3.1.1 (gestion autorisations). ");
     await saveJoinMode(roomId, "webcam");
     startCamera();
-    showInlineMessage("Webcam activee. Connexion en mode webcam.");
+    showInlineMessage("Webcam activée... Initialisation de la détection d'émotions en cours.");
+    
+    // Lancer la détection après un délai court pour laisser la vidéo démarrer
     setTimeout(() => {
-      showInlineMessage("");
-    }, 2500);
+      startEmotionDetection();
+    }, 500);
   } else {
     stopCamera();
     await saveJoinMode(roomId, "questionnaire");
@@ -561,16 +800,500 @@ function stopCamera() {
   videoBox.classList.add("hidden");
 }
 
+/* DÉTECTION D'ÉMOTIONS AVEC FACE-API */
+async function startEmotionDetection() {
+  console.log("[DETECTION] Initialisation démarrage...");
+  console.log("[DETECTION] faceApiReady:", faceApiReady);
+  console.log("[DETECTION] typeof faceapi:", typeof faceapi);
+
+  // Vérifier que Face-API est prêt
+  if (!faceApiReady) {
+    logFirebase("Face-API pas encore prêt, attente...", "error");
+    showInlineMessage("Détection en cours de chargement... Veuillez patienter.", true);
+    
+    // Attendre max 5 secondes
+    let waitCount = 0;
+    while (!faceApiReady && waitCount < 10) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      waitCount++;
+      console.log("[DETECTION] Attente...", waitCount);
+    }
+
+    if (!faceApiReady) {
+      logFirebase("Face-API timeout (5s)", "error");
+      console.error("[DETECTION] Face-API n'est pas chargé après 5s");
+      showInlineMessage("Erreur: Impossible de charger la détection d'émotions. Veuillez essayer le questionnaire.", true);
+      return;
+    }
+  }
+
+  detectionActive = true;
+  detectionStartTime = Date.now();
+  emotionHistory = [];
+  emotionStats = {
+    happy: 0, sad: 0, neutral: 0, angry: 0,
+    surprised: 0, fearful: 0, disgusted: 0
+  };
+
+  const detectionPanel = document.getElementById("detectionPanel");
+  detectionPanel.classList.remove("hidden");
+
+  console.log("[DETECTION] Détection lancée ! ✓");
+  logFirebase("Démarrage détection Face-API", "success");
+  logAudit("Mesure objective des emotions via IA : conforme CDC 6.3.1.1 (detection + enregistrement).");
+
+  // Boucle de détection toutes les 300ms
+  detectionInterval = setInterval(() => {
+    detectEmotions();
+  }, 300);
+
+  console.log("[DETECTION] Intervalle de détection lancé (300ms)");
+
+  // Timer
+  const timerInterval = setInterval(() => {
+    if (!detectionActive) {
+      clearInterval(timerInterval);
+      return;
+    }
+    const elapsed = Math.round((Date.now() - detectionStartTime) / 1000);
+    document.getElementById("timerDisplay").textContent = elapsed;
+  }, 1000);
+}
+
+async function detectEmotions() {
+  if (!detectionActive) return;
+
+  try {
+    // Vérifier que Face-API est disponible
+    if (typeof faceapi === "undefined") {
+      logFirebase("Face-API non chargé (undefined)", "error");
+      return;
+    }
+
+    const canvas = document.getElementById("overlay");
+    const ctx = canvas.getContext("2d");
+
+    // Vérifier dimensions vidéo
+    if (video.videoWidth === 0 || video.videoHeight === 0) {
+      // Vidéo pas encore chargée, c'est normal
+      return;
+    }
+
+    // Ajuster la taille du canvas
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    // Dessiner la vidéo sur le canvas
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    // Détecter les visages et expressions
+    const detections = await faceapi
+      .detectAllFaces(canvas, new faceapi.TinyFaceDetectorOptions())
+      .withFaceExpressions();
+
+    if (!detections || detections.length === 0) {
+      // Pas de visage détecté, c'est normal - ne pas spammer les logs
+      return;
+    }
+
+    // Premier visage détecté
+    const detection = detections[0];
+    const expressions = detection.expressions;
+
+    // Trouver l'émotion dominante
+    let maxEmotion = "neutral";
+    let maxConfidence = 0;
+
+    Object.entries(expressions).forEach(([emotion, confidence]) => {
+      if (confidence > maxConfidence) {
+        maxConfidence = confidence;
+        maxEmotion = emotion;
+      }
+    });
+
+    // Enregistrer l'émotion
+    recordEmotion(maxEmotion, maxConfidence);
+    updateEmotionDisplay();
+
+    // Dessiner boîte de détection (rectangle vert)
+    ctx.strokeStyle = "#4ade80";
+    ctx.lineWidth = 3;
+    const { x, y, width, height } = detection.detection.box;
+    ctx.strokeRect(x, y, width, height);
+
+    // Afficher l'émotion au-dessus du visage
+    ctx.fillStyle = "#4ade80";
+    ctx.font = "bold 16px Arial";
+    ctx.fillText(maxEmotion.toUpperCase(), x, y - 10);
+  } catch (error) {
+    // Ne logger que les erreurs critiques, pas les absences de visage
+    if (error.message && !error.message.includes("width") && !error.message.includes("height")) {
+      console.error("[FACE-API ERROR]", error);
+    }
+  }
+}
+
+function recordEmotion(emotion, confidence) {
+  const emotionMap = {
+    happy: "happy",
+    sad: "sad",
+    neutral: "neutral",
+    angry: "angry",
+    surprised: "surprised",
+    fearful: "fearful",
+    disgusted: "disgusted"
+  };
+
+  const mappedEmotion = emotionMap[emotion] || emotion;
+  emotionStats[mappedEmotion] = (emotionStats[mappedEmotion] || 0) + 1;
+
+  emotionHistory.push({
+    emotion: mappedEmotion,
+    confidence,
+    timestamp: Date.now()
+  });
+
+  // Log premier sample
+  if (emotionHistory.length === 1) {
+    console.log("[EMOTION] Premier sample détecté:", mappedEmotion, confidence);
+  }
+}
+
+function updateEmotionDisplay() {
+  const total = Object.values(emotionStats).reduce((a, b) => a + b, 0);
+  if (total === 0) return;
+
+  // Calculer les pourcentages
+  const percentages = {
+    happy: Math.round((emotionStats.happy / total) * 100),
+    sad: Math.round((emotionStats.sad / total) * 100),
+    neutral: Math.round((emotionStats.neutral / total) * 100),
+    angry: Math.round((emotionStats.angry / total) * 100),
+    surprised: Math.round((emotionStats.surprised / total) * 100),
+    fearful: Math.round((emotionStats.fearful / total) * 100),
+    disgusted: Math.round((emotionStats.disgusted / total) * 100)
+  };
+
+  // Mettre à jour les barres
+  Object.entries(percentages).forEach(([emotion, pct]) => {
+    const fillElement = document.getElementById(`stat-${emotion}`);
+    const pctElement = document.getElementById(`stat-${emotion}-pct`);
+    if (fillElement) fillElement.style.width = `${pct}%`;
+    if (pctElement) pctElement.textContent = `${pct}%`;
+  });
+
+  // Émotion dominante
+  const dominant = Object.entries(emotionStats).reduce((prev, current) =>
+    prev[1] > current[1] ? prev : current
+  );
+  
+  const emotionLabels = {
+    happy: "😊 Heureux",
+    sad: "😢 Triste",
+    neutral: "😐 Neutre",
+    angry: "😠 En colère",
+    surprised: "😲 Surpris",
+    fearful: "😨 Peur",
+    disgusted: "🤢 Dégoûté"
+  };
+
+  document.getElementById("dominantEmotionDisplay").textContent =
+    emotionLabels[dominant[0]] || "En attente...";
+}
+
+async function stopEmotionDetection() {
+  detectionActive = false;
+  clearInterval(detectionInterval);
+
+  const detectionPanel = document.getElementById("detectionPanel");
+  detectionPanel.classList.add("hidden");
+
+  const elapsedSeconds = Math.round((Date.now() - detectionStartTime) / 1000);
+
+  logFirebase(
+    `Détection terminée: ${elapsedSeconds}s, ${emotionHistory.length} samples`,
+    "success"
+  );
+
+  // Sauvegarder dans Firebase
+  await saveEmotionData(currentRoomId, elapsedSeconds);
+
+  // ✅ AFFICHER LES RÉSULTATS
+  displayEmotionResults(elapsedSeconds);
+}
+
+async function saveEmotionData(roomId, duration) {
+  if (!firebaseApi) return;
+
+  try {
+    const participantKey = localStorage.getItem("currentParticipantKey");
+    if (!participantKey) {
+      logFirebase("Pas de participantKey pour sauvegarder", "error");
+      return;
+    }
+
+    // ✅ VÉRIFIER LE MODE DU PARTICIPANT
+    const participantRef = firebaseApi.ref(
+      firebaseApi.db,
+      `rooms/${roomId}/participants/${participantKey}`
+    );
+    const participantSnap = await firebaseApi.get(participantRef);
+    
+    if (!participantSnap.exists()) {
+      logFirebase("Participant non trouvé", "error");
+      return;
+    }
+
+    const participant = participantSnap.val();
+    const isAnonymous = participant.mode === "anonymous";
+
+    // ✅ NE SAUVEGARDER QUE SI ANONYME
+    if (!isAnonymous) {
+      logFirebase(
+        `Participant nommé (${participant.mode}): données d'émotions NON sauvegardées`,
+        "success"
+      );
+      logAudit(
+        "Participant non-anonyme: émotions detectées mais non stockées (respect confidentialité)."
+      );
+      showInlineMessage("Données d'émotions traitées localement (participant non-anonyme).", false);
+      return;
+    }
+
+    // ✅ SAUVEGARDER POUR LES PARTICIPANTS ANONYMES
+    const emotionDataRef = firebaseApi.ref(
+      firebaseApi.db,
+      `rooms/${roomId}/emotions/${participantKey}`
+    );
+
+    const data = {
+      participantKey,
+      roomId,
+      duration,
+      totalSamples: emotionHistory.length,
+      emotionStats,
+      emotionHistory,
+      recordedAt: Date.now()
+    };
+
+    await firebaseApi.set(emotionDataRef, data);
+    logFirebase("Données d'émotions (anonyme) sauvegardées", "success");
+
+    // Mettre à jour le participant
+    await firebaseApi.set(participantRef, {
+      ...participant,
+      objectiveEmotionComplete: true,
+      dominantEmotion: Object.entries(emotionStats).reduce((prev, current) =>
+        prev[1] > current[1] ? prev : current
+      )[0],
+      updatedAt: Date.now()
+    });
+
+    showInlineMessage("Données d'émotions enregistrées avec succès ✓", false);
+  } catch (error) {
+    logFirebase(`Erreur sauvegarde émotions: ${error.message}`, "error");
+    showInlineMessage("Erreur lors de la sauvegarde.", true);
+  }
+}
+
+/* AFFICHAGE DES RÉSULTATS */
+function displayEmotionResults(duration) {
+  const resultsPanel = document.getElementById("resultsPanel");
+  const detectionPanel = document.getElementById("detectionPanel");
+
+  // Masquer panel détection, afficher résultats
+  detectionPanel.classList.add("hidden");
+  resultsPanel.classList.remove("hidden");
+
+  // Calculer l'émotion dominante
+  const dominantEmotion = Object.entries(emotionStats).reduce((prev, current) =>
+    prev[1] > current[1] ? prev : current
+  );
+
+  const emotionLabels = {
+    happy: "😊 Heureux",
+    sad: "😢 Triste",
+    neutral: "😐 Neutre",
+    angry: "😠 En colère",
+    surprised: "😲 Surpris",
+    fearful: "😨 Peur",
+    disgusted: "🤢 Dégoûté"
+  };
+
+  // 1. Mettre à jour stats clés
+  document.getElementById("resultDuration").textContent = `${duration}s`;
+  document.getElementById("resultSamples").textContent = emotionHistory.length;
+  document.getElementById("resultDominant").textContent = 
+    emotionLabels[dominantEmotion[0]] || "Neutre";
+
+  // 2. Générer le graphique
+  generateEmotionChart();
+
+  // 3. Remplir le tableau détails
+  populateEmotionTable();
+
+  console.log("[RESULTS] Résultats affichés ✓");
+}
+
+function generateEmotionChart() {
+  const chartContainer = document.getElementById("emotionChart");
+  const total = Object.values(emotionStats).reduce((a, b) => a + b, 0);
+
+  if (total === 0) {
+    chartContainer.innerHTML = "<p>Aucune émotion détectée</p>";
+    return;
+  }
+
+  // Créer graphique en barres horizontal avec SVG
+  const emotionOrder = ["happy", "sad", "neutral", "angry", "surprised", "fearful", "disgusted"];
+  const emotionLabels = {
+    happy: "😊 Heureux",
+    sad: "😢 Triste",
+    neutral: "😐 Neutre",
+    angry: "😠 En colère",
+    surprised: "😲 Surpris",
+    fearful: "😨 Peur",
+    disgusted: "🤢 Dégoûté"
+  };
+
+  const emotionColors = {
+    happy: "#FFEB3B",
+    sad: "#2196F3",
+    neutral: "#9E9E9E",
+    angry: "#F44336",
+    surprised: "#FF9800",
+    fearful: "#673AB7",
+    disgusted: "#4CAF50"
+  };
+
+  let svg = '<svg viewBox="0 0 400 280" xmlns="http://www.w3.org/2000/svg">';
+
+  // Titre
+  svg += '<text x="200" y="20" font-size="16" font-weight="bold" text-anchor="middle" fill="#333">Répartition des Émotions</text>';
+
+  // Barres
+  let yPos = 50;
+  emotionOrder.forEach((emotion) => {
+    const count = emotionStats[emotion] || 0;
+    const percentage = Math.round((count / total) * 100);
+    const barWidth = (percentage / 100) * 250;
+
+    // Barre
+    svg += `<rect x="100" y="${yPos}" width="${barWidth}" height="20" fill="${emotionColors[emotion]}" rx="3"/>`;
+
+    // Label
+    svg += `<text x="10" y="${yPos + 15}" font-size="12" fill="#333">${emotionLabels[emotion]}</text>`;
+
+    // Pourcentage
+    svg += `<text x="${105 + barWidth}" y="${yPos + 15}" font-size="11" font-weight="bold" fill="#333">${percentage}%</text>`;
+
+    yPos += 30;
+  });
+
+  svg += '</svg>';
+
+  chartContainer.innerHTML = svg;
+}
+
+function populateEmotionTable() {
+  const tableBody = document.getElementById("emotionTableBody");
+  const total = Object.values(emotionStats).reduce((a, b) => a + b, 0);
+
+  const emotionLabels = {
+    happy: "😊 Heureux",
+    sad: "😢 Triste",
+    neutral: "😐 Neutre",
+    angry: "😠 En colère",
+    surprised: "😲 Surpris",
+    fearful: "😨 Peur",
+    disgusted: "🤢 Dégoûté"
+  };
+
+  tableBody.innerHTML = "";
+
+  const emotionOrder = ["happy", "sad", "neutral", "angry", "surprised", "fearful", "disgusted"];
+
+  emotionOrder.forEach((emotion) => {
+    const count = emotionStats[emotion] || 0;
+    const percentage = total > 0 ? Math.round((count / total) * 100) : 0;
+
+    const row = `
+      <tr>
+        <td>${emotionLabels[emotion]}</td>
+        <td>${count}</td>
+        <td>${percentage}%</td>
+      </tr>
+    `;
+
+    tableBody.innerHTML += row;
+  });
+}
+
+/* HANDLERS BOUTONS RÉSULTATS */
+document.addEventListener("DOMContentLoaded", () => {
+  const repeatBtn = document.getElementById("repeatDetectionBtn");
+  const returnBtn = document.getElementById("returnHomeBtn");
+
+  if (repeatBtn) {
+    repeatBtn.onclick = () => {
+      // Réinitialiser et recommencer
+      const resultsPanel = document.getElementById("resultsPanel");
+      resultsPanel.classList.add("hidden");
+      
+      detectionActive = false;
+      clearInterval(detectionInterval);
+      emotionHistory = [];
+      emotionStats = {
+        happy: 0, sad: 0, neutral: 0, angry: 0,
+        surprised: 0, fearful: 0, disgusted: 0
+      };
+
+      startEmotionDetection();
+    };
+  }
+
+  if (returnBtn) {
+    returnBtn.onclick = () => {
+      // Retour à l'accueil
+      window.location.href = "accueil.html";
+    };
+  }
+});
+
 /* PRÊT POUR FACE-API.JS */
-Promise.all([
-  faceapi.nets.tinyFaceDetector.loadFromUri("/models"),
-  faceapi.nets.faceExpressionNet.loadFromUri("/models")
-]).then(() => {
-  console.log("Face API prête");
+async function initializeFaceApi() {
+  try {
+    if (typeof faceapi === "undefined") {
+      logFirebase("Face-API non disponible (script non chargé)", "error");
+      faceApiReady = false;
+      return;
+    }
+
+    logFirebase("Initialisation Face-API...");
+
+    // Charger les modèles depuis le CDN
+    const MODEL_URL = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/";
+
+    await Promise.all([
+      faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+      faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL)
+    ]);
+
+    faceApiReady = true;
+    logFirebase("Face-API initialisé avec succès ✓", "success");
+  } catch (error) {
+    logFirebase(`Erreur initialisation Face-API: ${error.message}`, "error");
+    faceApiReady = false;
+  }
+}
+
+// Initialiser Face-API au chargement de la page
+window.addEventListener("load", () => {
+  initializeFaceApi();
 });
 
 const initialRoomId = resolveRoomId();
-if (initialRoomId && initialRoomId !== "TEMP1234") {
+if (/^[A-Z]{4}\d{4}$/.test(initialRoomId)) {
   roomCodeInput.value = initialRoomId;
   currentRoomId = initialRoomId;
 }

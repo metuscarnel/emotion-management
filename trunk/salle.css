@@ -83,6 +83,26 @@ header {
 }
 .btn-copy-code:hover { background: rgba(255,255,255,0.2); }
 
+.btn-disconnect {
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    transition: all 0.2s;
+    font-weight: 600;
+}
+.btn-disconnect:hover {
+    background: rgba(192, 57, 43, 0.8);
+    border-color: rgba(192, 57, 43, 1);
+    transform: scale(1.05);
+}
+.btn-disconnect:active {
+    transform: scale(0.98);
+}
+
 /* Statut live */
 .statut-live {
     display: flex;
@@ -433,6 +453,195 @@ main { padding-bottom: 40px; }
 .retour a { color: var(--wine-main); text-decoration: none; font-weight: 600; }
 .retour a:hover { text-decoration: underline; opacity: 0.75; }
 
+/* ===== DASHBOARD ÉMOTIONS ===== */
+.emotion-dashboard {
+  margin-top: 40px;
+  padding: 30px;
+  background: linear-gradient(135deg, #f8f4f7 0%, #f4f1f5 100%);
+  border-radius: 16px;
+  border: 2px solid var(--vin);
+}
+
+.emotion-dashboard.hidden {
+  display: none;
+}
+
+.emotion-dashboard .section-title {
+  font-size: 24px;
+  color: var(--vin);
+  margin: 0 0 10px;
+}
+
+.section-subtitle {
+  margin: 0 0 30px;
+  font-size: 14px;
+  color: #666;
+}
+
+/* GRILLE GRAPHIQUES */
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  gap: 30px;
+  margin-bottom: 40px;
+}
+
+.chart-card {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.chart-card h3 {
+  margin: 0 0 20px;
+  font-size: 16px;
+  color: var(--vin);
+  font-weight: 600;
+}
+
+.chart-wrapper {
+  position: relative;
+  width: 100%;
+  height: 300px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* STATS EN DIRECT */
+.real-time-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+  margin-bottom: 40px;
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid #e2e8f0;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.stat-icon {
+  font-size: 24px;
+}
+
+.stat-label {
+  display: block;
+  font-size: 12px;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.stat-value {
+  display: block;
+  font-size: 18px;
+  font-weight: bold;
+  color: var(--vin);
+}
+
+.btn-refresh {
+  padding: 8px 16px;
+  border: 2px solid var(--vin);
+  background: white;
+  color: var(--vin);
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: 0.3s;
+}
+
+.btn-refresh:hover {
+  background: var(--vin);
+  color: white;
+}
+
+/* LISTE PARTICIPANTS AVEC ÉMOTIONS */
+.participants-emotions {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 20px;
+}
+
+.participants-emotions h3 {
+  margin: 0 0 20px;
+  font-size: 16px;
+  color: var(--vin);
+  font-weight: 600;
+}
+
+.participants-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.participant-emotion-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border-left: 4px solid var(--vin);
+}
+
+.participant-emotion-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.participant-emotion-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--vin);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.participant-emotion-details h4 {
+  margin: 0;
+  font-size: 14px;
+  color: #333;
+  font-weight: 600;
+}
+
+.participant-emotion-details p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: #999;
+}
+
+.participant-emotion-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: white;
+  border-radius: 20px;
+  border: 1px solid #e2e8f0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--vin);
+}
+
 /* ===== Footer ===== */
 footer {
     text-align: center;
@@ -449,4 +658,5 @@ footer {
     .header-right { align-items: flex-start; }
     .card { padding: 24px 18px; margin: -20px 12px 0; }
     .session-info { grid-template-columns: 1fr 1fr; }
+    .charts-grid { grid-template-columns: 1fr; }
 }

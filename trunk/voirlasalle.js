@@ -28,7 +28,7 @@ function resolveRoomId() {
   const titleCode = (document.getElementById("roomCode")?.textContent || "").trim();
   if (titleCode) return titleCode;
 
-  return "TEMP1234";
+  return "ABCD1234";
 }
 
 const roomId = resolveRoomId();
@@ -53,32 +53,39 @@ function renderParticipants(participantsArray) {
   let connectedCount = 0;
 
   participantsArray.forEach((p) => {
-    if (p.connected) connectedCount++;
+    // Vérification stricte pour éviter de compter les connexions fantômes
+    const isConnected = p.connected === true;
+    
+    if (isConnected) connectedCount++;
 
     const displayName = [p.firstName, p.lastName].filter(Boolean).join(" ").trim() || "Participant anonyme";
+    const statusText = isConnected ? "Connecté" : "Déconnecté";
+    const timeLabel = getLastLabel(p.joinedAt);
+    
+    // Couleurs explicites : Vert (Émeraude) si connecté, Rouge vif si déconnecté
+    const opacityStyle = isConnected ? "" : "opacity: 0.6;";
+    const stateColor = isConnected ? "#10b981" : "#ef4444";
 
     const div = document.createElement("div");
     div.className = "participant";
 
     div.innerHTML = `
-      <div>
+      <div style="${opacityStyle}">
         <div class="name">
-          <span class="status-dot ${p.connected ? "connected" : "disconnected"}"></span>
+          <span class="status-dot ${isConnected ? "connected" : "disconnected"}" style="background-color: ${stateColor}"></span>
           <strong>${displayName}</strong>
         </div>
-        <div class="small">
-          ${p.connected ? "Connecté" : "Déconnecté"} ${getLastLabel(p.joinedAt)}
-        </div>
+        <p class="small">${statusText} ${timeLabel}</p>
       </div>
-      <div class="state ${p.connected ? "connected" : "disconnected"}">
-        ${p.connected ? "Connecté" : "Déconnecté"}
+      <div class="state ${isConnected ? "connected" : "disconnected"}" style="${opacityStyle} color: ${stateColor}; font-weight: 600;">
+        ${isConnected ? "🟢 Connecté" : "🔴 Déconnecté"}
       </div>
     `;
 
     list.appendChild(div);
   });
 
-  summary.textContent = `→ ${connectedCount} participants connectés | Professeur : ${professorDisplayName} | Dernière activité : ${new Date().toLocaleTimeString()}`;
+  summary.textContent = `→ ${connectedCount} participant(s) connecté(s) | Professeur : ${professorDisplayName} | Maj : ${new Date().toLocaleTimeString("fr-FR", {hour: "2-digit", minute: "2-digit"})}`;
   totalCount.textContent = String(participantsArray.length);
 }
 

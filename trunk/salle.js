@@ -28,6 +28,10 @@ let participantsCache = [];
 let emotionsCache = {};
 let questionnairesCache = {};
 let roomMetaCache = {};
+let emotionStats = {
+  happy: 0, sad: 0, neutral: 0, angry: 0,
+  surprised: 0, fearful: 0, disgusted: 0
+};
 
 function logFirebase(message, type = "info") {
   const prefix = `[Firebase][SUIVI][${type.toUpperCase()}]`;
@@ -221,7 +225,7 @@ function renderComparison(subjective, objective, globalScore) {
 
 function renderActivityStatus() {
   const status = roomMetaCache?.activityStatus || "waiting";
-  const connectedCount = participantsCache.filter((participant) => participant.connected !== false).length;
+  const connectedCount = participantsCache.filter((participant) => participant.connected === true).length;
 
   if (status === "running") {
     liveStatusText.textContent = "Activite en cours";
@@ -254,7 +258,7 @@ function renderActivityStatus() {
 
 function renderParticipants(participants) {
   participantsCache = participants;
-  const connected = participants.filter((participant) => participant.connected !== false);
+  const connected = participants.filter((participant) => participant.connected === true);
 
   nbParticipants.textContent = String(connected.length);
 
@@ -274,8 +278,32 @@ function renderParticipants(participants) {
       const modeBadgeClass = mode === "webcam" ? "badge-webcam" : "badge-question";
       const modeLabel = mode === "webcam" ? "Webcam" : "Questionnaire";
 
+      const isConnected = participant.connected === true;
+      const statusBadgeClass = isConnected ? "badge-connecte" : "badge-deconnecte";
+      const statusText = isConnected ? "Connecté" : "Déconnecté";
+      const offlineStyle = isConnected ? "" : "background-color: #ef4444; color: white;";
+
+      // Préparation de l'affichage de l'émotion ou du score
+      const emotionLabels = {
+        happy: "😊 Heureux",
+        sad: "😢 Triste",
+        neutral: "😐 Neutre",
+        angry: "😠 Colère",
+        surprised: "😲 Surpris",
+        fearful: "😨 Peur",
+        disgusted: "🤢 Dégoûté"
+      };
+
+      let emotionBadge = "";
+      if (mode === "webcam") {
+        const emotionLabel = emotionLabels[participant.dominantEmotion] || "En attente...";
+        emotionBadge = `<span class="badge" style="background-color: #f8fafc; color: #475569; border: 1px solid #e2e8f0; ${!isConnected ? 'opacity: 0.6;' : ''}">${emotionLabel}</span>`;
+      } else if (participant.subjectiveScore) {
+        emotionBadge = `<span class="badge" style="background-color: #f8fafc; color: #475569; border: 1px solid #e2e8f0; ${!isConnected ? 'opacity: 0.6;' : ''}">Score : ${participant.subjectiveScore}/5</span>`;
+      }
+
       row.innerHTML = `
-        <div class="participant-info">
+        <div class="participant-info" style="${!isConnected ? 'opacity: 0.6;' : ''}">
           <div class="avatar">${initialsOf(participant)}</div>
           <div>
             <div class="participant-nom">${participantLabel(participant)}</div>
@@ -283,8 +311,9 @@ function renderParticipants(participants) {
           </div>
         </div>
         <div class="participant-badges">
-          <span class="badge ${modeBadgeClass}">${modeLabel}</span>
-          <span class="badge badge-connecte">${participant.connected === false ? "Deconnecte" : "Connecte"}</span>
+          <span class="badge ${modeBadgeClass}" style="${!isConnected ? 'opacity: 0.6;' : ''}">${modeLabel}</span>
+          ${emotionBadge}
+          <span class="badge ${statusBadgeClass}" style="${offlineStyle}">${statusText}</span>
         </div>
       `;
 
@@ -298,6 +327,16 @@ function renderParticipants(participants) {
 
   renderActivityStatus();
   renderDashboard();
+
+  // ✅ Mettre à jour les graphiques émotions
+  updateEmotionCharts(participants, emotionsCache);
+  displayParticipantsEmotions(participants);
+
+  // Mettre à jour stats live
+  const liveCount = document.getElementById("liveParticipantCount");
+  const liveTime = document.getElementById("liveUpdateTime");
+  if (liveCount) liveCount.textContent = participants.filter(p => p.connected === true).length;
+  if (liveTime) liveTime.textContent = new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 }
 
 function renderOptionsAndGraph() {
@@ -434,8 +473,32 @@ function subscribeEmotions() {
 
   firebaseApi.onValue(emotionsRef, (snapshot) => {
     const raw = snapshot.val();
-    emotionsCache = summarizeEmotions(raw);
+    const sessions = raw ? Object.values(raw) : [];
+    
+    // 📊 Agréger les statistiques d'émotions de tous les participants
+    emotionStats = {
+      happy: 0, sad: 0, neutral: 0, angry: 0,
+      surprised: 0, fearful: 0, disgusted: 0
+    };
+    
+    sessions.forEach((session) => {
+      if (session.emotionStats) {
+        Object.entries(session.emotionStats).forEach(([emo, count]) => {
+          if (emotionStats.hasOwnProperty(emo)) {
+            emotionStats[emo] += Number(count);
+          }
+        });
+      }
+    });
+
+    // On met à jour le cache avec les valeurs agrégées pour le reste du tableau de bord
+    emotionsCache = { ...emotionStats };
+
     renderDashboard();
+    
+    // ✅ Mettre à jour les graphiques
+    updateEmotionCharts(participantsCache, emotionStats);
+    
     logFirebase("Flux emotions mis a jour en temps reel", "success");
     logAudit("Visualisation statistique temps reel des emotions: CDC 6.3.2.1.");
   }, (error) => {
@@ -484,7 +547,7 @@ window.lancerActivite = async function lancerActivite() {
   if (!firebaseApi) return;
 
   try {
-    const connectedCount = participantsCache.filter((participant) => participant.connected !== false).length;
+    const connectedCount = participantsCache.filter((participant) => participant.connected === true).length;
     const isRunning = (roomMetaCache?.activityStatus || "waiting") === "running";
 
     if (!isRunning && connectedCount === 0) {
@@ -514,6 +577,203 @@ window.lancerActivite = async function lancerActivite() {
   }
 };
 
+window.disconnect = function disconnect() {
+  if (confirm("Êtes-vous sûr de vouloir vous déconnecter ?\n\nCela fermera la salle et effacera toutes les données de session.")) {
+    // Effacer toutes les données de session
+    localStorage.removeItem("currentRoomCode");
+    localStorage.removeItem("currentTeacherUid");
+    localStorage.removeItem("currentTeacherDisplayName");
+    localStorage.removeItem("currentUser");
+    
+    logAudit("Déconnexion professeur - Fermeture de la salle et effacement des données de session.");
+    logFirebase("Professeur déconnecté avec succès", "success");
+    
+    // Rediriger vers l'accueil
+    window.location.href = "accueil.html";
+  }
+};
+
+/* ===== GRAPHIQUES CHART.JS ===== */
+let pieChart = null;
+let lineChart = null;
+let emotionTimeSeries = {};
+
+function initializeCharts() {
+  // Vérifier que Chart est chargé
+  if (typeof Chart === "undefined") {
+    logFirebase("⚠️ ERREUR CRITIQUE: Chart.js n'est pas chargé dans le navigateur", "error");
+    console.error("Chart.js CDN script not loaded. Check <script> tag in HTML.");
+    return false;
+  }
+
+  const pieCtx = document.getElementById("emotionPieChart")?.getContext("2d");
+  const lineCtx = document.getElementById("emotionLineChart")?.getContext("2d");
+
+  if (!pieCtx) {
+    logFirebase("⚠️ ERREUR: Canvas #emotionPieChart n'existe pas ou n'est pas visible", "error");
+    return false;
+  }
+  if (!lineCtx) {
+    logFirebase("⚠️ ERREUR: Canvas #emotionLineChart n'existe pas ou n'est pas visible", "error");
+    return false;
+  }
+
+  try {
+    // Graphique PIE
+    pieChart = new Chart(pieCtx, {
+      type: "doughnut",
+      data: {
+        labels: ["😊 Heureux", "😢 Triste", "😐 Neutre", "😠 Colère", "😲 Surpris", "😨 Peur", "🤢 Dégoûté"],
+        datasets: [{
+          data: [0, 0, 0, 0, 0, 0, 0],
+          backgroundColor: ["#FFEB3B", "#2196F3", "#9E9E9E", "#F44336", "#FF9800", "#673AB7", "#4CAF50"],
+          borderColor: "#fff",
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: "bottom",
+            labels: { font: { size: 12 }, padding: 15 }
+          }
+        }
+      }
+    });
+
+    logFirebase("✅ Graphique PIE initialisé avec succès", "success");
+
+    // Graphique ÉVOLUTION (Histogramme / Bar Chart)
+    lineChart = new Chart(lineCtx, {
+      type: "bar",
+      data: {
+        labels: ["😊 Heureux", "😢 Triste", "😐 Neutre", "😠 Colère", "😲 Surpris", "😨 Peur", "🤢 Dégoûté"],
+        datasets: [
+          {
+            label: "Répartition (%)",
+            data: [0, 0, 0, 0, 0, 0, 0],
+            backgroundColor: ["#FFEB3B", "#2196F3", "#9E9E9E", "#F44336", "#FF9800", "#673AB7", "#4CAF50"]
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: { beginAtZero: true, min: 0, max: 100 }
+        },
+        plugins: {
+          legend: { display: false } // Masqué car les couleurs et labels sont explicites sur l'axe X
+        }
+      }
+    });
+
+    logFirebase("✅ Graphique ÉVOLUTION (Bar) initialisé avec succès", "success");
+    return true;
+  } catch (error) {
+    logFirebase(`❌ Erreur lors de l'initialisation des graphiques: ${error.message}`, "error");
+    console.error("Chart initialization error:", error);
+    return false;
+  }
+}
+
+function updateEmotionCharts(participants, emotions) {
+  // Vérifier que Chart.js est disponible
+  if (typeof Chart === "undefined") {
+    logFirebase("⚠️ Chart.js n'est pas chargé", "error");
+    return;
+  }
+
+  // Si les graphiques ne sont pas initialisés, essayer de les initialiser
+  if (!pieChart || !lineChart) {
+    logFirebase("⚠️ Graphiques non initialisés, tentative de réinitialisation...", "error");
+    const success = initializeCharts();
+    if (!success) {
+      logFirebase("❌ IMPOSSIBLE d'initialiser les graphiques", "error");
+      return;
+    }
+  }
+
+  // Calculer le total d'émotions
+  const total = Object.values(emotionStats || {}).reduce((a, b) => a + b, 0);
+  const emotionOrder = ["happy", "sad", "neutral", "angry", "surprised", "fearful", "disgusted"];
+
+  // Si pas de données, on force à 0% au lieu d'arrêter la fonction
+  const percentages = total > 0 
+    ? emotionOrder.map(e => Math.round(((emotionStats[e] || 0) / total) * 100))
+    : [0, 0, 0, 0, 0, 0, 0];
+
+  try {
+    // Mettre à jour le graphique PIE
+    pieChart.data.datasets[0].data = percentages;
+    pieChart.update("none"); // Mode "none" pour éviter les animations
+    logFirebase(`📊 Graphique PIE mis à jour: ${JSON.stringify(emotionStats)}`, "info");
+  } catch (err) {
+    logFirebase(`❌ Erreur mise à jour PIE: ${err.message}`, "error");
+  }
+
+  try {
+    // Mettre à jour l'histogramme classique (Pourcentage par émotion)
+    lineChart.data.datasets[0].data = percentages;
+
+    lineChart.update("none");
+    logFirebase(`📈 Graphique BAR mis à jour`, "info");
+  } catch (err) {
+    logFirebase(`❌ Erreur mise à jour LINE: ${err.message}`, "error");
+  }
+}
+
+function displayParticipantsEmotions(participants) {
+  const container = document.getElementById("participantsEmotionsList");
+  if (!container) return;
+
+  container.innerHTML = "";
+
+  const emotionLabels = {
+    happy: "😊 Heureux",
+    sad: "😢 Triste",
+    neutral: "😐 Neutre",
+    angry: "😠 Colère",
+    surprised: "😲 Surpris",
+    fearful: "😨 Peur",
+    disgusted: "🤢 Dégoûté"
+  };
+
+  participants.forEach((p) => {
+    const avatar = ((p.firstName || "P")[0] + (p.lastName || "")[0] || "?").toUpperCase();
+    const emotion = emotionLabels[p.dominantEmotion || "neutral"] || "Neutre";
+    const timeAgo = p.updatedAt ? formatTimeAgo(p.updatedAt) : "—";
+
+    const html = `
+      <div class="participant-emotion-item">
+        <div class="participant-emotion-info">
+          <div class="participant-emotion-avatar">${avatar}</div>
+          <div class="participant-emotion-details">
+            <h4>${participantLabel(p)}</h4>
+            <p>${timeAgo}</p>
+          </div>
+        </div>
+        <div class="participant-emotion-badge">${emotion}</div>
+      </div>
+    `;
+
+    container.innerHTML += html;
+  });
+}
+
+function formatTimeAgo(timestamp) {
+  if (!timestamp) return "—";
+  const seconds = Math.floor((Date.now() - timestamp) / 1000);
+  
+  if (seconds < 60) return "À l'instant";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `il y a ${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  return `il y a ${hours}h`;
+}
+
 async function start() {
   roomId = resolveRoomId();
 
@@ -536,6 +796,16 @@ async function start() {
     logFirebase("Connexion Auth OK", "success");
 
     localStorage.setItem("currentRoomCode", roomId);
+
+    // Afficher le dashboard AVANT d'initialiser les graphiques (pour que le canvas ait des dimensions)
+    const dashboard = document.getElementById("emotionDashboard");
+    if (dashboard) dashboard.classList.remove("hidden");
+
+    // Utilisation d'un Timeout pour garantir que le CSS a bien affiché le Canvas avant l'initialisation
+    setTimeout(() => {
+      logFirebase("Initialisation des graphiques Chart.js...", "success");
+      initializeCharts();
+    }, 150);
 
     subscribeRoomMeta();
     subscribeParticipants();

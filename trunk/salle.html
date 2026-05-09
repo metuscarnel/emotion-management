@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Salle d'attente — Emotion Monitoring Platform</title>
     <link rel="stylesheet" href="salle.css">
+    <!-- Chart.js pour les graphiques -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
 </head>
 <body>
 
@@ -28,6 +30,9 @@
                     <span class="dot-live"></span>
                     <span id="liveStatusText">En attente</span>
                 </div>
+                <button class="btn-disconnect" type="button" onclick="disconnect()" title="Déconnexion">
+                    🚪 Déconnexion
+                </button>
             </div>
         </div>
     </header>
@@ -49,6 +54,61 @@
                     <div class="empty-icon">👥</div>
                     <p>En attente des participants…</p>
                     <small>Partagez le code de la salle pour qu'ils puissent rejoindre.</small>
+                </div>
+            </div>
+
+            <!-- ===== SECTION GRAPHIQUES ÉMOTIONS ===== -->
+            <div id="emotionDashboard" class="emotion-dashboard hidden">
+                <h2 class="section-title">📊 Suivi en Temps Réel des Émotions</h2>
+                <p class="section-subtitle" id="dashboardSubtitle">Analyse des émotions des participants dans la salle</p>
+
+                <!-- GRAPHIQUES -->
+                <div class="charts-grid">
+                    <!-- GRAPHIQUE PIE -->
+                    <div class="chart-card">
+                        <h3>Répartition Actuelle</h3>
+                        <div class="chart-wrapper">
+                            <canvas id="emotionPieChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- GRAPHIQUE LINE -->
+                    <div class="chart-card">
+                        <h3>Évolution des Émotions</h3>
+                        <div class="chart-wrapper">
+                            <canvas id="emotionLineChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- STATS EN DIRECT -->
+                <div class="real-time-stats">
+                    <div class="stat-item">
+                        <span class="stat-icon">👥</span>
+                        <div>
+                            <span class="stat-label">Participants connectés</span>
+                            <span class="stat-value" id="liveParticipantCount">0</span>
+                        </div>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-icon">🕐</span>
+                        <div>
+                            <span class="stat-label">Dernière mise à jour</span>
+                            <span class="stat-value" id="liveUpdateTime">--:--</span>
+                        </div>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-icon">⚙️</span>
+                        <button class="btn-refresh" id="refreshDashboardBtn">Rafraîchir</button>
+                    </div>
+                </div>
+
+                <!-- LISTE PARTICIPANTS AVEC ÉMOTIONS -->
+                <div class="participants-emotions">
+                    <h3>Participants Connectés</h3>
+                    <div id="participantsEmotionsList" class="participants-list">
+                        <!-- Rempli dynamiquement -->
+                    </div>
                 </div>
             </div>
 
@@ -144,7 +204,7 @@
 
             <!-- Lien retour -->
             <p class="retour">
-                <a href="creersalle.html">← Retour à la création de salle</a>
+                <a href="create.html">← Retour à la salle</a>
             </p>
 
         </div>

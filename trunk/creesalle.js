@@ -1,10 +1,14 @@
-import { auth, db, ref, set, push, ensureAuth } from "./firebase-config.js";
+import { auth, db, ref, set, push, get, ensureAuth } from "./firebase-config.js";
 
 const emailInput = document.getElementById("email");
 const submitBtn = document.getElementById("submitBtn");
 const errorMessage = document.getElementById("errorMessage");
 
 const emailRegex = /^[a-z]+\.[a-z]+@u-paris\.fr$/;
+
+function normalize(value) {
+  return (value || "").trim().toLowerCase();
+}
 
 function getFirebaseErrorMessage(error) {
   const code = error?.code || "";
@@ -66,6 +70,21 @@ submitBtn.addEventListener("click", async (event) => {
     try {
       const user = await ensureAuth();
       const teachersRef = ref(db, "teachers");
+
+      const existingTeachersSnap = await get(teachersRef);
+      const existingTeachers = existingTeachersSnap.exists() ? existingTeachersSnap.val() : {};
+
+      const alreadyExists = Object.values(existingTeachers).some((teacher) => (
+        normalize(teacher?.email) === normalize(emailInput.value) &&
+        normalize(teacher?.matiere) === normalize(document.getElementById("matiere")?.value)
+      ));
+
+      if (alreadyExists) {
+        errorMessage.textContent = "⚠️ Un compte professeur existe déjà avec ce mail et cette matière.";
+        errorMessage.style.display = "block";
+        return;
+      }
+
       const teacherRef = push(teachersRef);
 
       await set(teacherRef, {

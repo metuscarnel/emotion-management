@@ -1,4 +1,4 @@
-import { db, ref, set, push, get, ensureAuth } from "./firebase-config.js";
+import { db, ref, set, push, get, ensureAuth, onDisconnect } from "./firebase-config.js";
 
 const anonymousBlock = document.getElementById("anonymousBlock");
 const namedBlock = document.getElementById("namedBlock");
@@ -79,8 +79,19 @@ document.getElementById("joinForm").addEventListener("submit", async e => {
 
   roomCode.value = normalizeRoomCode(roomCode.value);
 
-  // Numéro étudiant : 8 chiffres
-  if (!namedBlock.classList.contains("disabled")) {
+  const isNamed = !namedBlock.classList.contains("disabled");
+
+  // Validation pour le mode non anonyme
+  if (isNamed) {
+    const namedLastNameInput = namedBlock.querySelector(".row input:nth-child(1)");
+    const namedFirstNameInput = namedBlock.querySelector(".row input:nth-child(2)");
+
+    if (!namedLastNameInput?.value.trim() || !namedFirstNameInput?.value.trim()) {
+      errorMsg.textContent = "Veuillez renseigner votre nom et votre prénom.";
+      return;
+    }
+
+    // Numéro étudiant : 8 chiffres
     if (!/^\d{8}$/.test(studentNumber.value)) {
       errorMsg.textContent = "Le numéro étudiant doit contenir exactement 8 chiffres.";
       return;
@@ -104,7 +115,6 @@ document.getElementById("joinForm").addEventListener("submit", async e => {
     const user = await ensureAuth();
     logFirebase(`Connexion Auth OK (uid=${user.uid})`, "success");
 
-    const isNamed = !namedBlock.classList.contains("disabled");
     const teacherName = (document.getElementById("teacherName")?.value || "").trim();
     const roomId = roomCode.value.trim();
 
@@ -135,7 +145,7 @@ document.getElementById("joinForm").addEventListener("submit", async e => {
         ? (namedFirstNameInput?.value || "").trim()
         : (anonymousInputs[1]?.value || "").trim(),
       teacherName,
-      connected: true,
+      connected: false,
       joinedAt: Date.now()
     };
 
