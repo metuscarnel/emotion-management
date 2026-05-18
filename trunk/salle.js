@@ -481,6 +481,13 @@ function renderDashboard() {
 
   renderEmotionRows(distLabels);
   renderOptionsAndGraph(distLabels);
+  
+  // Vérifier que les graphiques sont initialisés avant la mise à jour
+  if (!pieChart || !lineChart) {
+    logFirebase("📊 Graphiques non initialisés, lancement initialisation...", "info");
+    initializeCharts();
+  }
+  
   updateEmotionCharts(objectiveStats, subjectiveStats);
 
   displayParticipantsEmotions(participantsCache);
@@ -873,6 +880,24 @@ function initializeCharts() {
     return false;
   }
 
+  // Nettoyer les anciens graphiques avant de réinitialiser
+  if (pieChart) {
+    try {
+      pieChart.destroy();
+      pieChart = null;
+    } catch (e) {
+      logFirebase(`Attention: Impossible de détruire l'ancien PIE chart: ${e.message}`, "error");
+    }
+  }
+  if (lineChart) {
+    try {
+      lineChart.destroy();
+      lineChart = null;
+    } catch (e) {
+      logFirebase(`Attention: Impossible de détruire l'ancien LINE chart: ${e.message}`, "error");
+    }
+  }
+
   const pieCtx = document.getElementById("emotionPieChart")?.getContext("2d");
   const lineCtx = document.getElementById("emotionLineChart")?.getContext("2d");
 
@@ -928,6 +953,7 @@ function initializeCharts() {
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        animation: { duration: 0 }, // Pas d'animation pour les mises à jour instantanées
         scales: {
           y: { beginAtZero: true, min: 0, max: 100 }
         },
@@ -992,27 +1018,47 @@ function updateEmotionCharts(objectiveStats, subjectiveStats) {
   });
 
   try {
-    // Mise à jour du PIE chart
-    pieChart.data.datasets[0].data = objCounts.map(Math.round);
-    pieChart.update();
-    logFirebase(`📊 Graphique PIE mis à jour avec données webcam`, "info");
+    // Mise à jour du PIE chart avec forçage de la mise à jour
+    if (pieChart && pieChart.data && pieChart.data.datasets[0]) {
+      pieChart.data.datasets[0].data = objCounts.map(Math.round);
+      pieChart.update('none'); // 'none' = pas d'animation pour une mise à jour instantanée
+      logFirebase(`📊 Graphique PIE mis à jour avec données webcam`, "success");
+    }
   } catch (err) {
     logFirebase(`❌ Erreur mise à jour PIE: ${err.message}`, "error");
+    // Essayer de recréer le graphique en cas d'erreur
+    try {
+      if (pieChart) pieChart.destroy();
+      pieChart = null;
+      initializeCharts();
+    } catch (reinitErr) {
+      logFirebase(`❌ Impossible de recréer le PIE chart: ${reinitErr.message}`, "error");
+    }
   }
 
   try {
-    // Mise à jour de l'histogramme
-    lineChart.data.datasets[0].data = combinedPercentages;
+    // Mise à jour de l'histogramme avec forçage de la mise à jour
+    if (lineChart && lineChart.data && lineChart.data.datasets[0]) {
+      lineChart.data.datasets[0].data = combinedPercentages;
 
-    // Si un ancien dataset existe encore en cache, on le supprime
-    if (lineChart.data.datasets.length > 1) {
-      lineChart.data.datasets.splice(1, 1);
+      // Si un ancien dataset existe encore en cache, on le supprime
+      if (lineChart.data.datasets.length > 1) {
+        lineChart.data.datasets.splice(1);
+      }
+
+      lineChart.update('none'); // 'none' = pas d'animation pour une mise à jour instantanée
+      logFirebase(`📈 Graphique BAR mis à jour`, "success");
     }
-
-    lineChart.update();
-    logFirebase(`📈 Graphique BAR mis à jour`, "info");
   } catch (err) {
     logFirebase(`❌ Erreur mise à jour LINE: ${err.message}`, "error");
+    // Essayer de recréer le graphique en cas d'erreur
+    try {
+      if (lineChart) lineChart.destroy();
+      lineChart = null;
+      initializeCharts();
+    } catch (reinitErr) {
+      logFirebase(`❌ Impossible de recréer le LINE chart: ${reinitErr.message}`, "error");
+    }
   }
 }
 
