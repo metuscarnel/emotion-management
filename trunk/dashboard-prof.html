@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Espace Professeur - Emotion Monitoring</title>
+    <link rel="stylesheet" href="dashboard-prof.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <header>
+        <div class="header-inner">
+            <div class="header-left">
+                <h1>Espace Professeur</h1>
+                <p id="welcomeMessage">Bienvenue, Chargement...</p>
+            </div>
+            <div class="header-right">
+                <button class="btn-disconnect" id="logoutBtn">Déconnexion</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="container">
+        <!-- ACTION PRINCIPALE -->
+        <section class="main-action">
+            <a href="create.html?new=1" class="btn-primary">
+                <span class="icon">➕</span> Créer une nouvelle salle
+            </a>
+            <p class="action-hint">Créez une nouvelle session pour accueillir vos étudiants et lancer l'activité.</p>
+        </section>
+
+        <hr class="divider">
+
+        <!-- SALLES ACTIVES -->
+        <section class="rooms-section">
+            <div class="section-header">
+                <h2>Salles en cours ou en attente</h2>
+                <span class="badge" id="activeRoomsCount">0</span>
+            </div>
+            <div id="activeRoomsContainer" class="rooms-grid">
+                <!-- Les cartes des salles actives apparaîtront ici -->
+                <div class="loading-state">Chargement des salles actives...</div>
+            </div>
+        </section>
+
+        <!-- HISTORIQUE -->
+        <section class="rooms-section mt-30">
+            <div class="section-header">
+                <h2>Historique des salles (Terminées)</h2>
+                <span class="badge" id="endedRoomsCount">0</span>
+            </div>
+            <div id="endedRoomsContainer" class="rooms-grid">
+                <!-- Les cartes des salles terminées apparaîtront ici -->
+                <div class="loading-state">Chargement de l'historique...</div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>🔒 Espace sécurisé • Emotion Monitoring</p>
+        <p>© 2026 — Projet L2T1 — Université Paris Cité</p>
+    </footer>
+
+    <!-- Modale de déconnexion -->
+    <div id="disconnectModal" class="modal hidden">
+        <div class="modal-content">
+            <h3>Confirmation de déconnexion</h3>
+            <p>Êtes-vous sûr de vouloir vous déconnecter de votre Espace Professeur ?</p>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" id="cancelDisconnectBtn">Annuler</button>
+                <button class="btn btn-danger" id="confirmDisconnectBtn">Se déconnecter</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="dashboard-prof.js"></script>
+</body>
+</html>

@@ -37,7 +37,8 @@ let professorDisplayName = localStorage.getItem("currentTeacherDisplayName") || 
 function getLastLabel(timestamp) {
   if (!timestamp) return "il y a un instant";
 
-  const diffSec = Math.floor((Date.now() - timestamp) / 1000);
+  let diffSec = Math.floor((Date.now() - timestamp) / 1000);
+  if (diffSec < 0) diffSec = 0; // Évite les temps négatifs si léger décalage
   if (diffSec < 60) return "à l'instant";
 
   const diffMin = Math.floor(diffSec / 60);
@@ -58,9 +59,11 @@ function renderParticipants(participantsArray) {
     
     if (isConnected) connectedCount++;
 
-    const displayName = [p.firstName, p.lastName].filter(Boolean).join(" ").trim() || "Participant anonyme";
+    const isAnonymous = p.mode === "anonymous";
+
+    const displayName = isAnonymous ? "Anonyme" : ([p.firstName, p.lastName].filter(Boolean).join(" ").trim() || "Anonyme");
     const statusText = isConnected ? "Connecté" : "Déconnecté";
-    const timeLabel = getLastLabel(p.joinedAt);
+    const timeLabel = getLastLabel(p.updatedAt || p.joinedAt); // Utilise la dernière activité
     
     // Couleurs explicites : Vert (Émeraude) si connecté, Rouge vif si déconnecté
     const opacityStyle = isConnected ? "" : "opacity: 0.6;";

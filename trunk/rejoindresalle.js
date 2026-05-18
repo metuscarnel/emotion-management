@@ -1,10 +1,18 @@
-const roomCodeInput = document.getElementById("roomCode");
-const codeError = document.getElementById("codeError");
-const enableCam = document.getElementById("enableCam");
-const noCam = document.getElementById("noCam");
-const videoBox = document.getElementById("videoBox");
-const video = document.getElementById("video");
-const activityStatusBanner = document.getElementById("activityStatusBanner");
+// ✅ INITIALISATION DOM SÉCURISÉE - déclaration temporaire
+let roomCodeInput = null;
+let codeError = null;
+let videoBox = null;
+let video = null;
+let activityStatusBanner = null;
+
+// Fonction pour initialiser les références DOM
+function initializeDOMReferences() {
+  roomCodeInput = document.getElementById("roomCode");
+  codeError = document.getElementById("codeError");
+  videoBox = document.getElementById("videoBox");
+  video = document.getElementById("video");
+  activityStatusBanner = document.getElementById("activityStatusBanner");
+}
 
 let useCamera = true;
 let firebaseApi = null;
@@ -13,6 +21,7 @@ let questionnaireQuestions = [];
 let questionnaireSection = null;
 let currentRoomId = "";
 let currentActivityStatus = "waiting";
+let hasJoined = false;
 
 // Détection d'émotions
 let detectionActive = false;
@@ -24,6 +33,21 @@ let emotionStats = {
 };
 let detectionInterval = null;
 let faceApiReady = false;
+let lastFacePosition = null;
+let movementWarningCount = 0;
+let lastSyncTime = 0;
+
+// ✅ PROTECTIONS CONCURRENCE & OPTIMISATION POUR 40+ UTILISATEURS
+let cameraStreamActive = false;
+let faceDetectionInProgress = false;
+let lastSuccessfulSync = 0;
+let lastSyncedEmotion = null; // Tracker pour ne syncer que si changement
+let syncQueue = null; // Debounce timer
+
+// 🚀 CONSTANTS POUR 40+ UTILISATEURS
+const SYNC_RATE_LIMIT = 6000; // 6s entre syncs (au lieu de 3s) - réduit charge Firebase de 50%
+const DEBOUNCE_EMOTION_CHANGE = 2000; // Attendre 2s après un changement d'émotion pour syncer
+const MIN_CONFIDENCE_SYNC = 0.4; // Ne syncer que si confiance > 40%
 
 // === GESTION DE LA DÉCONNEXION ===
 async function markAsDisconnected() {
@@ -42,7 +66,6 @@ async function markAsDisconnected() {
     });
     
     logFirebase(`✓ Participant marqué comme déconnecté`, "success");
-    logAudit("Déconnexion participant enregistrée dans Firebase");
   } catch (error) {
     logFirebase(`Erreur lors de la déconnexion: ${error?.message}`, "error");
   }
@@ -53,12 +76,40 @@ window.addEventListener("beforeunload", markAsDisconnected);
 window.addEventListener("pagehide", markAsDisconnected);
 
 // === GESTION DU BOUTON QUITTER ===
+const leaveModal = document.getElementById("leaveModal");
+const cancelLeaveBtn = document.getElementById("cancelLeaveBtn");
+const confirmLeaveBtn = document.getElementById("confirmLeaveBtn");
+
 async function handleLeaveRoom() {
+    if (leaveModal) {
+        leaveModal.classList.remove("hidden");
+    } else {
+        // Fallback si pas de modale
+        if (confirm("Voulez-vous vraiment quitter la salle ?")) {
+            executeLeave();
+        }
+    }
+}
+
+async function executeLeave() {
   await markAsDisconnected();
   logFirebase("Redirection vers accueil après déconnexion", "success");
   setTimeout(() => {
     window.location.href = "accueil.html";
   }, 300);
+}
+
+if (cancelLeaveBtn) {
+    cancelLeaveBtn.addEventListener("click", () => {
+        if (leaveModal) leaveModal.classList.add("hidden");
+    });
+}
+
+if (confirmLeaveBtn) {
+    confirmLeaveBtn.addEventListener("click", () => {
+        if (leaveModal) leaveModal.classList.add("hidden");
+        executeLeave();
+    });
 }
 
 const leaveBtn = document.getElementById("leaveBtn");
@@ -77,10 +128,6 @@ function logFirebase(message, type = "info") {
     return;
   }
   console.info(prefix, message);
-}
-
-function logAudit(message) {
-  console.info(`[AUDIT] ${message}`);
 }
 
 function setActivityBanner(status, message) {
@@ -102,11 +149,11 @@ function setActivityBanner(status, message) {
 
 function defaultLikertOptions() {
   return [
-    { label: "Pas du tout", score: 1 },
-    { label: "Un peu", score: 2 },
-    { label: "Moyennement", score: 3 },
-    { label: "Beaucoup", score: 4 },
-    { label: "Extrêmement", score: 5 }
+    { label: "Pas du tout d'accord", score: 1 },
+    { label: "Plutôt pas d'accord", score: 2 },
+    { label: "Neutre", score: 3 },
+    { label: "Plutôt d'accord", score: 4 },
+    { label: "Tout à fait d'accord", score: 5 }
   ];
 }
 
@@ -300,13 +347,12 @@ async function loadQuestions() {
     throw new Error("Impossible de sélectionner les questions aléatoires");
   }
 
-  // Étape 4: Traçabilité scientifique - Enregistrer l'ordre des questions pour audit
-  const sessionId = `${currentRoomId}_${Date.now()}`;
-  const questionIds = questionnaireQuestions.map(q => q.id).join(", ");
-  logAudit(`[RIGUEUR SCIENTIFIQUE] Session ${sessionId} - Questions sélectionnées (aléatoires): ${questionIds}`);
-  
+  const questionIds = questionnaireQuestions.map((q) => q.id).join(",");
+  const sessionId = Date.now().toString(36);
+  localStorage.setItem("currentQuestionnaireSession", sessionId);
+  localStorage.setItem("currentQuestionnaireIds", questionIds);
+
   logFirebase(`✅ ${selectedCount} questions sélectionnées aléatoirement sur ${allQuestionsBank.length}`, "success");
-  logAudit("Mesure subjective aléatoire: conforme CDC 6.3.1.2 (sélection aléatoire pour rigueur scientifique, pas de biais de sélection).");
   
   return questionnaireQuestions;
 }
@@ -333,14 +379,53 @@ function renderQuestionnaire(questions, roomId) {
 
   section.innerHTML = "";
 
+  // ✅ CONTRÔLE: Ne montrer le questionnaire que si l'activité est en cours
+  if (currentActivityStatus !== "running") {
+    // Afficher un message d'attente
+    const waitingMessage = document.createElement("div");
+    waitingMessage.style.textAlign = "center";
+    waitingMessage.style.padding = "32px 20px";
+    waitingMessage.style.color = "#64748b";
+    waitingMessage.style.borderRadius = "12px";
+    waitingMessage.style.background = "#f1f5f9";
+    waitingMessage.style.border = "2px dashed #cbd5e1";
+    
+    const icon = document.createElement("div");
+    icon.style.fontSize = "40px";
+    icon.style.marginBottom = "12px";
+    icon.textContent = "⏳";
+    waitingMessage.appendChild(icon);
+    
+    const title = document.createElement("h3");
+    title.textContent = "Questionnaire";
+    title.style.margin = "0 0 8px";
+    title.style.fontSize = "18px";
+    title.style.color = "#475569";
+    waitingMessage.appendChild(title);
+    
+    const text = document.createElement("p");
+    text.textContent = currentActivityStatus === "waiting" 
+      ? "Le questionnaire apparaîtra une fois que le professeur aura lancé l'activité."
+      : currentActivityStatus === "ended"
+      ? "L'activité est terminée. Le questionnaire n'est plus disponible."
+      : "L'activité est en pause. Le questionnaire n'est pas accessible pour le moment.";
+    text.style.margin = "0";
+    text.style.fontSize = "14px";
+    waitingMessage.appendChild(text);
+    
+    section.appendChild(waitingMessage);
+    section.style.display = "block";
+    return;
+  }
+
   const title = document.createElement("h2");
-  title.textContent = "Questionnaire d'auto-evaluation emotionnelle";
+  title.textContent = "Questionnaire";
   title.style.margin = "0 0 8px";
   title.style.fontSize = "20px";
   section.appendChild(title);
 
   const subtitle = document.createElement("p");
-  subtitle.textContent = `Salle: ${roomId} • Repondez a toutes les questions`;
+  subtitle.textContent = `Salle: ${roomId} • Évaluez votre ressenti`;
   subtitle.style.margin = "0 0 14px";
   subtitle.style.fontSize = "14px";
   subtitle.style.color = "#475569";
@@ -374,6 +459,13 @@ function renderQuestionnaire(questions, roomId) {
       label.style.borderRadius = "999px";
       label.style.cursor = "pointer";
       label.style.fontSize = "13px";
+      
+      // ✅ CONTRÔLE: Désactiver le style des labels si l'activité n'est pas en cours
+      if (currentActivityStatus !== "running") {
+        label.style.opacity = "0.5";
+        label.style.cursor = "not-allowed";
+        label.style.backgroundColor = "#f1f5f9";
+      }
 
       const input = document.createElement("input");
       input.type = "radio";
@@ -383,6 +475,9 @@ function renderQuestionnaire(questions, roomId) {
       input.dataset.questionText = question.text;
       input.dataset.optionLabel = option.label;
       input.dataset.optionIndex = String(optionIndex);
+      
+      // ✅ CONTRÔLE: Désactiver les radios si l'activité n'est pas en cours
+      input.disabled = currentActivityStatus !== "running";
 
       const span = document.createElement("span");
       span.textContent = option.label;
@@ -406,6 +501,13 @@ function renderQuestionnaire(questions, roomId) {
   submitBtn.style.background = "#7A0026";
   submitBtn.style.color = "white";
   submitBtn.style.cursor = "pointer";
+  
+  // ✅ CONTRÔLE: Désactiver le bouton si l'activité n'est pas en cours
+  submitBtn.disabled = currentActivityStatus !== "running";
+  if (submitBtn.disabled) {
+    submitBtn.style.opacity = "0.5";
+    submitBtn.style.cursor = "not-allowed";
+  }
 
   form.appendChild(submitBtn);
   section.appendChild(form);
@@ -452,29 +554,38 @@ async function saveQuestionnaire(roomId, payload) {
     text: q.text
   }));
 
-  const responsesRef = firebaseApi.ref(firebaseApi.db, `rooms/${roomId}/questionnaires/${responseKey}`);
-  logFirebase(`Ecriture questionnaire rooms/${roomId}/questionnaires/${responseKey} ...`);
-
-  await firebaseApi.set(responsesRef, {
-    uid: firebaseApi.auth.currentUser?.uid || "",
-    roomId,
-    participantKey: participantKey || "",
-    submittedAt: Date.now(),
-    totalScore: payload.totalScore,
-    averageScore: payload.averageScore,
-    answers: payload.answers,
-    // ✅ TRAÇABILITÉ: Enregistrer l'ordre exact des questions posées
-    questionsUsed: questionsUsed,
-    questionsCount: questionnaireQuestions.length
-  });
-
-  logFirebase(`✅ Questionnaire enregistré (score moyen=${payload.averageScore}) avec ordre des questions`, "success");
-  logAudit(`Traçabilité scientifique: ${questionsUsed.length} questions enregistrées avec leurs positions pour audit`);
+  let isAnonymous = false;
+  let existing = {};
 
   if (participantKey) {
     const participantRef = firebaseApi.ref(firebaseApi.db, `rooms/${roomId}/participants/${participantKey}`);
     const participantSnap = await firebaseApi.get(participantRef);
-    const existing = participantSnap.exists() ? participantSnap.val() : {};
+    existing = participantSnap.exists() ? participantSnap.val() : {};
+    isAnonymous = existing.mode === "anonymous";
+  }
+
+  if (!isAnonymous) {
+    const responsesRef = firebaseApi.ref(firebaseApi.db, `rooms/${roomId}/questionnaires/${responseKey}`);
+    logFirebase(`Ecriture questionnaire rooms/${roomId}/questionnaires/${responseKey} ...`);
+
+    await firebaseApi.set(responsesRef, {
+      uid: firebaseApi.auth.currentUser?.uid || "",
+      roomId,
+      participantKey: participantKey || "",
+      submittedAt: Date.now(),
+      totalScore: payload.totalScore,
+      averageScore: payload.averageScore,
+      answers: payload.answers,
+      questionsUsed: questionsUsed,
+      questionsCount: questionnaireQuestions.length
+    });
+    logFirebase(`✅ Questionnaire enregistré (score moyen=${payload.averageScore}) avec ordre des questions`, "success");
+  } else {
+    logFirebase("Participant anonyme : détails du questionnaire non sauvegardés dans la BD.", "info");
+  }
+
+  if (participantKey) {
+    const participantRef = firebaseApi.ref(firebaseApi.db, `rooms/${roomId}/participants/${participantKey}`);
 
     await firebaseApi.set(participantRef, {
       ...existing,
@@ -489,60 +600,87 @@ async function saveQuestionnaire(roomId, payload) {
 
 async function openQuestionnaireFlow(roomId) {
   try {
+    // ✅ ÉTAPE 1: Charger les questions en premier (indépendamment du statut)
+    // Cela les garde en cache pour utilisation ultérieure
+    if (!questionnaireLoaded) {
+      try {
+        const questions = await loadQuestions();
+        logFirebase(`✅ Questions chargées et cachées: ${questions.length} questions`, "success");
+      } catch (e) {
+        logFirebase(`Erreur chargement questions: ${e}`, "error");
+      }
+    }
+
+    // ✅ ÉTAPE 2: Afficher le questionnaire selon le statut actuel
+    if (currentActivityStatus === "waiting") {
+      showInlineMessage("En attente du lancement de l'activité par le professeur. Le questionnaire apparaîtra bientôt.", false);
+      const section = ensureQuestionnaireSection();
+      renderQuestionnaire([], roomId); // Afficher le message d'attente
+      return;
+    }
+
     if (currentActivityStatus === "ended") {
       showInlineMessage("La session est terminée. Le questionnaire n'est plus disponible.", true);
       return;
     }
 
-    const questions = await loadQuestions();
-    renderQuestionnaire(questions, roomId);
+    if (currentActivityStatus === "paused") {
+      showInlineMessage("L'activité est en pause. Le questionnaire n'est pas accessible pour le moment.", true);
+      return;
+    }
 
-    const form = document.getElementById("questionnaireForm");
-    form.onsubmit = async (event) => {
-      event.preventDefault();
+    // ✅ STATUS = "running": Afficher le questionnaire complet
+    if (questionnaireQuestions.length > 0) {
+      renderQuestionnaire(questionnaireQuestions, roomId);
 
-      const result = collectQuestionnaireAnswers(questions);
-      if (!result.ok) {
-        showInlineMessage(result.error, true);
-        return;
+      const form = document.getElementById("questionnaireForm");
+      if (form) {
+        form.onsubmit = async (event) => {
+          event.preventDefault();
+
+          const result = collectQuestionnaireAnswers(questionnaireQuestions);
+          if (!result.ok) {
+            showInlineMessage(result.error, true);
+            return;
+          }
+
+          try {
+            // ✅ CONTRÔLE: Vérifier à nouveau que l'activité est toujours en cours lors de la soumission
+            if (currentActivityStatus !== "running") {
+              showInlineMessage("La session n'est plus active. Impossible d'enregistrer le questionnaire.", true);
+              return;
+            }
+
+            const submitBtn = form.querySelector("button[type='submit']");
+            if (submitBtn) {
+              submitBtn.textContent = "Enregistrement en cours...";
+              submitBtn.disabled = true;
+            }
+
+            await saveQuestionnaire(roomId, result);
+            
+            const section = document.getElementById("dynamicQuestionnaire");
+            if (section) {
+              section.innerHTML = `
+                <div style="text-align: center; padding: 40px 20px;">
+                  <div style="font-size: 60px; margin-bottom: 16px;">✅</div>
+                  <h2 style="color: #10b981; margin-bottom: 10px; font-size: 24px;">Questionnaire validé !</h2>
+                  <p style="color: #475569; font-size: 16px; margin-bottom: 25px; line-height: 1.5;">
+                    Merci pour votre participation.<br>
+                    Vos réponses au questionnaire ont bien été enregistrées.
+                  </p>
+                </div>
+              `;
+            }
+            
+            showInlineMessage(""); // Effacer tout message d'erreur précédent
+          } catch (error) {
+            logFirebase(`Echec enregistrement questionnaire: ${error?.code || error?.message || error}`, "error");
+            showInlineMessage("Impossible d'enregistrer le questionnaire pour le moment.", true);
+          }
+        };
       }
-
-      try {
-        if (currentActivityStatus === "ended") {
-          showInlineMessage("La session est terminée. Impossible d'enregistrer un nouveau questionnaire.", true);
-          return;
-        }
-
-        const submitBtn = form.querySelector("button[type='submit']");
-        if (submitBtn) {
-          submitBtn.textContent = "Enregistrement en cours...";
-          submitBtn.disabled = true;
-        }
-
-        await saveQuestionnaire(roomId, result);
-        
-        const section = document.getElementById("dynamicQuestionnaire");
-        if (section) {
-          section.innerHTML = `
-            <div style="text-align: center; padding: 40px 20px;">
-              <div style="font-size: 60px; margin-bottom: 16px;">✅</div>
-              <h2 style="color: #10b981; margin-bottom: 10px; font-size: 24px;">Questionnaire validé !</h2>
-              <p style="color: #475569; font-size: 16px; margin-bottom: 25px; line-height: 1.5;">
-                Merci pour votre participation.<br>
-                Votre score subjectif moyen est de <strong>${result.averageScore}/5</strong>.
-              </p>
-              <button onclick="window.location.href='accueil.html'" style="background: #830c2a; color: white; padding: 12px 28px; border: none; border-radius: 25px; cursor: pointer; font-size: 15px; font-weight: 600; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">Terminer et quitter</button>
-            </div>
-          `;
-        }
-        
-        showInlineMessage(""); // Effacer tout message d'erreur précédent
-        logAudit("Calcul automatique d'un score emotionnel subjectif : conforme CDC 6.3.1.2.");
-      } catch (error) {
-        logFirebase(`Echec enregistrement questionnaire: ${error?.code || error?.message || error}`, "error");
-        showInlineMessage("Impossible d'enregistrer le questionnaire pour le moment.", true);
-      }
-    };
+    }
   } catch (error) {
     logFirebase(`Echec chargement questionnaire: ${error?.code || error?.message || error}`, "error");
     showInlineMessage("Questionnaire indisponible pour le moment.", true);
@@ -554,13 +692,16 @@ function resolveRoomId() {
   const fromUrl = (params.get("room") || "").trim().toUpperCase();
   if (fromUrl) return fromUrl;
 
+  // ✅ PRÉ-REMPLISSAGE: Vérifier le localStorage d'abord
   const fromStorage = (localStorage.getItem("currentRoomCode") || "").trim().toUpperCase();
-  if (fromStorage) return fromStorage;
+  if (fromStorage && /^[A-Z]{4}\d{4}$/.test(fromStorage)) {
+    return fromStorage;
+  }
 
   const fromInput = (roomCodeInput?.value || "").trim().toUpperCase();
   if (fromInput) return fromInput;
 
-  return "ABCD1234";
+  return null;
 }
 
 function showInlineMessage(message, isError = false) {
@@ -591,11 +732,18 @@ async function initFirebase() {
     if (participantKey && roomId) {
       const participantRef = firebaseApi.ref(firebaseApi.db, `rooms/${roomId}/participants/${participantKey}`);
       
+      // ✅ MARQUER LE PARTICIPANT COMME PRÉSENT IMMÉDIATEMENT
+      logFirebase(`Marquage du participant comme connecté...`, "info");
+      await firebaseApi.update(participantRef, {
+        connected: true,
+        updatedAt: Date.now()
+      });
+      logFirebase(`✓ Participant marqué comme connecté`, "success");
+      
       const connectedRef = firebaseApi.ref(firebaseApi.db, ".info/connected");
       firebaseApi.onValue(connectedRef, (snap) => {
         if (snap.val() === true) {
           firebaseApi.onDisconnect(participantRef).update({ connected: false });
-          firebaseApi.update(participantRef, { connected: true, updatedAt: Date.now() });
         }
       });
     }
@@ -611,7 +759,7 @@ function subscribeActivityStatus(roomId) {
   const metaRef = firebaseApi.ref(firebaseApi.db, `rooms/${roomId}/meta`);
   logFirebase(`Abonnement statut activité: rooms/${roomId}/meta`);
 
-  firebaseApi.onValue(metaRef, (snapshot) => {
+  firebaseApi.onValue(metaRef, async (snapshot) => {
     if (!snapshot.exists()) {
       setActivityBanner("waiting", "En attente de la création de la session par le professeur.");
       return;
@@ -621,22 +769,91 @@ function subscribeActivityStatus(roomId) {
     const status = meta.activityStatus || "waiting";
 
     if (status === "running") {
+      const wasEnded = currentActivityStatus === "ended";
+      const wasPaused = currentActivityStatus === "paused";
+      currentActivityStatus = "running";
+      
       setActivityBanner("running", "Activité démarrée par le professeur. Vous pouvez participer normalement.");
-      showInlineMessage("Activité démarrée par le professeur.", false);
-      logAudit("Côté étudiant: réception du démarrage de session en temps réel.");
+      showInlineMessage("Activité en cours...", false);
+      
+      // ✅ CONTRÔLE: Réafficher le questionnaire complet quand l'activité démarre
+      try {
+        await openQuestionnaireFlow(currentRoomId);
+      } catch (e) {
+        console.error("[QUESTIONNAIRE] Erreur réaffichage:", e);
+      }
+      
+      // ✅ Si la session reprend après avoir été arrêtée (cas rare mais possible si prof relance)
+      // On réactive les champs si besoin
+      if (wasEnded) {
+        const questionnaireForm = document.getElementById("questionnaireForm");
+        if (questionnaireForm) {
+          questionnaireForm.querySelectorAll("input, button").forEach((field) => {
+            field.disabled = false;
+          });
+        }
+      }
+
+      // ✅ Si on reprend depuis une pause, redémarrer la détection
+      if (wasPaused && useCamera && detectionActive) {
+        console.log("[DETECTION] Reprise de la détection après pause");
+        // La détection redémarre automatiquement via le setInterval existant
+      }
+
+      // Si la détection était en pause ou si on vient de relancer, on tente de redémarrer
+      if (useCamera && !detectionActive && !questionnaireLoaded) {
+          const detectionPanel = document.getElementById("detectionPanel");
+          // Si on est déjà "dans" la salle (panel détection visible ou prêt)
+          if (detectionPanel && !detectionPanel.classList.contains("hidden")) {
+              detectionActive = true;
+              console.log("[DETECTION] Reprise de la détection");
+              
+              // Si la caméra a été coupée (cas 'ended' -> 'running'), on tente de la relancer
+              if (wasEnded) {
+                initCamera(); // Relancer le flux vidéo
+              }
+          }
+      }
+
+      return;
+    }
+
+    if (status === "paused") {
+      currentActivityStatus = "paused";
+      setActivityBanner("paused", "Activité mise en pause par le professeur. Veuillez patienter.");
+      showInlineMessage("Activité en pause.", true);
+      
+      // ✅ CONTRÔLE: Masquer le questionnaire quand l'activité est en pause
+      const questionnaireSection = document.getElementById("dynamicQuestionnaire");
+      if (questionnaireSection) {
+        renderQuestionnaire([], currentRoomId); // Afficher le message de pause
+      }
+      
+      // Suspendre la détection sans arrêter la caméra
+      detectionActive = false;
+      
       return;
     }
 
     if (status === "ended") {
+      currentActivityStatus = "ended";
       setActivityBanner("ended", "Session terminée par le professeur. La participation est désormais clôturée.");
-      showInlineMessage("Session terminée par le professeur.", true);
+      showInlineMessage("Session terminée.", true);
       stopCamera();
+      detectionActive = false;
 
+      // ✅ CONTRÔLE: Masquer le questionnaire et les champs quand l'activité se termine
       const questionnaireForm = document.getElementById("questionnaireForm");
       if (questionnaireForm) {
         questionnaireForm.querySelectorAll("input, button").forEach((field) => {
           field.disabled = true;
         });
+      }
+      
+      // Mettre à jour l'affichage du questionnaire pour montrer "session terminée"
+      const questionnaireSection = document.getElementById("dynamicQuestionnaire");
+      if (questionnaireSection) {
+        renderQuestionnaire([], currentRoomId); // Afficher le message "session terminée"
       }
 
       const joinBtn = document.getElementById("joinBtn");
@@ -644,13 +861,52 @@ function subscribeActivityStatus(roomId) {
         joinBtn.disabled = true;
       }
 
-      logAudit("Côté étudiant: réception de la fin de session en temps réel.");
       return;
     }
 
+    currentActivityStatus = "waiting";
     setActivityBanner("waiting", "La salle est prête. En attente du démarrage de l'activité par le professeur.");
+    
+    // ✅ CONTRÔLE: Afficher le message d'attente pour le questionnaire
+    const questionnaireSection = document.getElementById("dynamicQuestionnaire");
+    if (questionnaireSection) {
+      renderQuestionnaire([], currentRoomId); // Afficher le message d'attente
+    }
   }, (error) => {
     logFirebase(`Echec abonnement statut activité: ${error?.code || error?.message || error}`, "error");
+  });
+}
+
+// ✅ ÉCOUTER LES QUESTIONNAIRES SUPPLÉMENTAIRES ENVOYÉS PAR LE PROF
+function subscribeSupplementaryQuestionnaires(roomId) {
+  if (!firebaseApi) return;
+
+  const metaRef = firebaseApi.ref(firebaseApi.db, `rooms/${roomId}/meta`);
+  let lastSupplementaryQuestionnaireId = null;
+
+  firebaseApi.onValue(metaRef, async (snapshot) => {
+    if (!snapshot.exists()) return;
+
+    const meta = snapshot.val() || {};
+    const currentQuestionnaireId = meta.lastSupplementaryQuestionnaireId;
+
+    // ✅ Vérifier si un nouveau questionnaire a été envoyé
+    if (currentQuestionnaireId && currentQuestionnaireId !== lastSupplementaryQuestionnaireId) {
+      lastSupplementaryQuestionnaireId = currentQuestionnaireId;
+      
+      logFirebase(`Nouveau questionnaire supplémentaire reçu (ID: ${currentQuestionnaireId})`, "success");
+      
+      // Afficher le questionnaire principal à nouveau (refresh)
+      if (currentActivityStatus === "running") {
+        try {
+          await openQuestionnaireFlow(roomId);
+        } catch (e) {
+          console.error("[QUESTIONNAIRE] Erreur affichage questionnaire supplémentaire:", e);
+        }
+      }
+    }
+  }, (error) => {
+    logFirebase(`Echec abonnement questionnaires supplémentaires: ${error?.message}`, "error");
   });
 }
 
@@ -701,103 +957,117 @@ async function saveJoinMode(roomId, mode) {
   }
 }
 
-/* TOGGLE OPTIONS */
-enableCam.onclick = () => {
-  enableCam.classList.add("active");
-  noCam.classList.remove("active");
-  useCamera = true;
-};
-
-noCam.onclick = () => {
-  noCam.classList.add("active");
-  enableCam.classList.remove("active");
-  useCamera = false;
-  stopCamera();
-};
-
-/* BOUTON TERMINER DÉTECTION */
-document.addEventListener("DOMContentLoaded", () => {
-  const endDetectionBtn = document.getElementById("endDetectionBtn");
-  if (endDetectionBtn) {
-    endDetectionBtn.onclick = stopEmotionDetection;
-  }
-});
+/* TOGGLE OPTIONS - SUPPRIMÉ car mode mixte obligatoire */
+// Participation mixte (Webcam + Questionnaire) imposée.
+useCamera = true;
 
 /* VALIDATION CODE SALLE */
-roomCodeInput.addEventListener("input", () => {
-  roomCodeInput.value = roomCodeInput.value.toUpperCase();
+if (roomCodeInput) {
+  roomCodeInput.addEventListener("input", () => {
+    roomCodeInput.value = roomCodeInput.value.toUpperCase();
 
-  if (!/^[A-Z]{4}\d{4}$/.test(roomCodeInput.value)) {
-    showInlineMessage("Le code doit contenir 4 lettres suivies de 4 chiffres", true);
-  } else {
-    showInlineMessage("");
-  }
-});
+    if (!/^[A-Z]{4}\d{4}$/.test(roomCodeInput.value)) {
+      showInlineMessage("Le code doit contenir 4 lettres suivies de 4 chiffres", true);
+    } else {
+      showInlineMessage("");
+    }
+  });
+}
 
-/* BOUTON REJOINDRE */
-document.getElementById("joinBtn").onclick = async () => {
-  if (!firebaseApi) {
-    await initFirebase();
-  }
-
-  const roomId = roomCodeInput.value.trim() || resolveRoomId();
-  currentRoomId = roomId;
-
-  if (!/^[A-Z]{4}\d{4}$/.test(roomId)) {
-    showInlineMessage("Code de salle invalide (format attendu: ABCD1234)", true);
-    return;
-  }
-
-  localStorage.setItem("currentRoomCode", roomId);
-
-  subscribeActivityStatus(roomId);
-
-  if (useCamera) {
-    const consent = confirm(
-      "Autorisez-vous l’accès à la webcam pour la détection des émotions ?\n\n" +
-      "Aucune image ne sera enregistrée."
-    );
-
-    if (!consent) {
-      showInlineMessage("Veuillez utiliser le mode questionnaire.", true);
-      logAudit("Autorisation camera refusee : conforme CDC 6.3.1.1 (consentement explicite respecte).");
+function requestWebcamConsent() {
+  return new Promise((resolve) => {
+    const modal = document.getElementById("webcamModal");
+    if (!modal) {
+      resolve(confirm("Autorisez-vous l’accès à la webcam ? (Aucune image n'est enregistrée)"));
       return;
     }
-
-    logAudit("Autorisation camera accordee : conforme CDC 6.3.1.1 (gestion autorisations). ");
-    await saveJoinMode(roomId, "webcam");
-    startCamera();
-    showInlineMessage("Webcam activée... Initialisation de la détection d'émotions en cours.");
+    modal.classList.remove("hidden");
     
-    // Lancer la détection après un délai court pour laisser la vidéo démarrer
-    setTimeout(() => {
-      startEmotionDetection();
-    }, 500);
-  } else {
-    stopCamera();
-    await saveJoinMode(roomId, "questionnaire");
-    logAudit("Mode questionnaire sans webcam : conforme CDC 6.3.1.2 (questionnaire, echelles, score subjectif, enregistrement). ");
-    await openQuestionnaireFlow(roomId);
-    showInlineMessage("Mode questionnaire activé. Vous pouvez continuer sans webcam.");
-  }
-};
+    const cancelBtn = document.getElementById("cancelWebcamBtn");
+    const confirmBtn = document.getElementById("confirmWebcamBtn");
+    
+    const handleCancel = () => {
+      modal.classList.add("hidden");
+      cleanup();
+      resolve(false);
+    };
+    const handleConfirm = () => {
+      modal.classList.add("hidden");
+      cleanup();
+      resolve(true);
+    };
+    const cleanup = () => { cancelBtn.removeEventListener("click", handleCancel); confirmBtn.removeEventListener("click", handleConfirm); };
+    
+    cancelBtn.addEventListener("click", handleCancel);
+    confirmBtn.addEventListener("click", handleConfirm);
+  });
+}
+
+// ✅ NOTE: L'événement onclick du bouton joinBtn est maintenant initialisé dans le DOMContentLoaded
+// pour s'assurer que les références DOM sont disponibles
 
 /* WEBCAM */
 async function startCamera() {
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    // ✅ PROTECTION: Vérifier si un stream est déjà actif
+    if (cameraStreamActive && video.srcObject) {
+      logFirebase("Stream caméra déjà actif, réutilisation.", "info");
+      videoBox.classList.remove("hidden");
+      return;
+    }
+
+    // Arrêter tout stream précédent
+    if (video.srcObject) {
+      video.srcObject.getTracks().forEach((track) => {
+        track.stop();
+        logFirebase(`Track caméra arrêtée: ${track.kind}`, "info");
+      });
+    }
+
+    logFirebase("Tentative accès caméra...", "info");
+    cameraStreamActive = false; // Marquer comme en attente
+    
+    const stream = await navigator.mediaDevices.getUserMedia({ 
+      video: { 
+        width: { ideal: 640 },
+        height: { ideal: 480 }
+      } 
+    });
+    
     video.srcObject = stream;
+    cameraStreamActive = true;
     videoBox.classList.remove("hidden");
+    
+    logFirebase("✓ Caméra activée avec succès", "success");
   } catch (e) {
-    showInlineMessage("Impossible d'accéder à la webcam.", true);
+    cameraStreamActive = false;
+    const errorMsg = e?.name === "NotAllowedError" 
+      ? "Accès caméra refusé. Vérifiez les permissions du navigateur."
+      : e?.name === "NotFoundError"
+      ? "Aucune caméra détectée."
+      : `Erreur caméra: ${e?.message || e}`;
+    
+    logFirebase(`Erreur caméra: ${errorMsg}`, "error");
+    showInlineMessage(errorMsg, true);
   }
 }
 
 function stopCamera() {
-  if (video.srcObject) {
-    video.srcObject.getTracks().forEach((t) => t.stop());
+  try {
+    if (video.srcObject) {
+      video.srcObject.getTracks().forEach((track) => {
+        track.stop();
+        logFirebase(`Track arrêtée: ${track.kind}`, "info");
+      });
+      video.srcObject = null;
+    }
+    cameraStreamActive = false;
+    videoBox.classList.add("hidden");
+    logFirebase("Caméra arrêtée", "success");
+  } catch (e) {
+    console.error("[CAMERA] Erreur arrêt caméra:", e);
+    cameraStreamActive = false;
   }
-  videoBox.classList.add("hidden");
 }
 
 /* DÉTECTION D'ÉMOTIONS AVEC FACE-API */
@@ -811,18 +1081,20 @@ async function startEmotionDetection() {
     logFirebase("Face-API pas encore prêt, attente...", "error");
     showInlineMessage("Détection en cours de chargement... Veuillez patienter.", true);
     
-    // Attendre max 5 secondes
+    // ✅ AMÉLIORATION: Attendre max 8 secondes (au lieu de 5) avec meilleur feedback
     let waitCount = 0;
-    while (!faceApiReady && waitCount < 10) {
+    const maxWait = 16; // 16 * 500ms = 8 secondes
+    
+    while (!faceApiReady && waitCount < maxWait) {
       await new Promise(resolve => setTimeout(resolve, 500));
       waitCount++;
-      console.log("[DETECTION] Attente...", waitCount);
+      console.log("[DETECTION] Attente Face-API... (", waitCount * 500, "ms )");
     }
 
     if (!faceApiReady) {
-      logFirebase("Face-API timeout (5s)", "error");
-      console.error("[DETECTION] Face-API n'est pas chargé après 5s");
-      showInlineMessage("Erreur: Impossible de charger la détection d'émotions. Veuillez essayer le questionnaire.", true);
+      logFirebase("Face-API timeout (8s)", "error");
+      console.error("[DETECTION] Face-API n'est pas chargé après 8s");
+      showInlineMessage("Erreur: Impossible de charger la détection. Veuillez recharger la page ou utiliser le questionnaire.", true);
       return;
     }
   }
@@ -840,15 +1112,24 @@ async function startEmotionDetection() {
 
   console.log("[DETECTION] Détection lancée ! ✓");
   logFirebase("Démarrage détection Face-API", "success");
-  logAudit("Mesure objective des emotions via IA : conforme CDC 6.3.1.1 (detection + enregistrement).");
 
-  // Boucle de détection toutes les 300ms
+  // ✅ Suppression du bouton "Fin de mesure" - pas d'affichage
+
+  if (detectionInterval) clearInterval(detectionInterval);
+  
+  // ✅ PROTECTION: Intervalle de détection avec gestion d'erreur
   detectionInterval = setInterval(() => {
-    detectEmotions();
+    if (detectionActive) {
+      detectEmotions().catch(err => {
+        console.error("[DETECTION] Erreur dans la boucle de détection:", err);
+      });
+    }
   }, 300);
 
   console.log("[DETECTION] Intervalle de détection lancé (300ms)");
 
+  // ✅ Plus de bouton "Fin de mesure" - l'utilisateur clique sur "Quitter la salle"
+  
   // Timer
   const timerInterval = setInterval(() => {
     if (!detectionActive) {
@@ -856,14 +1137,22 @@ async function startEmotionDetection() {
       return;
     }
     const elapsed = Math.round((Date.now() - detectionStartTime) / 1000);
-    document.getElementById("timerDisplay").textContent = elapsed;
+    const timerDisplay = document.getElementById("timerDisplay");
+    if (timerDisplay) timerDisplay.textContent = elapsed;
   }, 1000);
 }
 
 async function detectEmotions() {
   if (!detectionActive) return;
 
+  // ✅ PROTECTION: Empêcher les appels concurrents à Face-API
+  if (faceDetectionInProgress) {
+    return; // Ignorer l'appel si une détection est déjà en cours
+  }
+
   try {
+    faceDetectionInProgress = true;
+
     // Vérifier que Face-API est disponible
     if (typeof faceapi === "undefined") {
       logFirebase("Face-API non chargé (undefined)", "error");
@@ -891,14 +1180,66 @@ async function detectEmotions() {
       .detectAllFaces(canvas, new faceapi.TinyFaceDetectorOptions())
       .withFaceExpressions();
 
+    // Redimensionner les résultats pour le canvas
+    const resizedDetections = faceapi.resizeResults(detections, { width: canvas.width, height: canvas.height });
+    
+    // Dessiner les boîtes de détection et les émotions sur le canvas
+    faceapi.draw.drawDetections(canvas, resizedDetections);
+    faceapi.draw.drawFaceExpressions(canvas, resizedDetections);
+
+    const positionFeedback = document.getElementById("positionFeedback");
+
     if (!detections || detections.length === 0) {
-      // Pas de visage détecté, c'est normal - ne pas spammer les logs
+      if (positionFeedback) {
+        positionFeedback.textContent = "❌ Visage non détecté. Placez-vous bien face à la caméra.";
+        positionFeedback.style.color = "#ef4444";
+      }
+      lastFacePosition = null;
       return;
     }
 
     // Premier visage détecté
     const detection = detections[0];
     const expressions = detection.expressions;
+    const box = detection.detection.box;
+
+    // 1. Vérifier la distance (taille relative du visage)
+    // On considère que si le visage occupe moins de 20% de la largeur du canvas, l'utilisateur est trop loin
+    const faceWidthRatio = box.width / canvas.width;
+    let distanceMessage = "";
+    if (faceWidthRatio < 0.25) {
+      distanceMessage = " 📏 Rapprochez-vous un peu.";
+    }
+
+    // 2. Vérifier le mouvement (stabilité)
+    const currentCenter = {
+      x: box.x + box.width / 2,
+      y: box.y + box.height / 2
+    };
+
+    let stabilityMessage = "";
+    if (lastFacePosition) {
+      const distance = Math.sqrt(
+        Math.pow(currentCenter.x - lastFacePosition.x, 2) +
+        Math.pow(currentCenter.y - lastFacePosition.y, 2)
+      );
+      
+      // Si le centre a bougé de plus de 10% de la largeur du canvas entre deux frames (300ms)
+      if (distance > canvas.width * 0.08) {
+        stabilityMessage = " ⚠️ Ne bougez pas trop.";
+      }
+    }
+    lastFacePosition = currentCenter;
+
+    if (positionFeedback) {
+      if (distanceMessage || stabilityMessage) {
+        positionFeedback.textContent = `💡 ${distanceMessage}${stabilityMessage}`.trim();
+        positionFeedback.style.color = "#856404"; // Couleur d'avertissement (jaune/orange)
+      } else {
+        positionFeedback.textContent = "✅ Positionnement OK";
+        positionFeedback.style.color = "#10b981";
+      }
+    }
 
     // Trouver l'émotion dominante
     let maxEmotion = "neutral";
@@ -913,7 +1254,31 @@ async function detectEmotions() {
 
     // Enregistrer l'émotion
     recordEmotion(maxEmotion, maxConfidence);
-    updateEmotionDisplay();
+    
+    // Affichage en temps réel
+    const liveDisplay = document.getElementById("liveEmotionDisplay");
+    const frEmotions = {
+        happy: "😊 Heureux",
+        sad: "😢 Triste",
+        neutral: "😐 Neutre",
+        angry: "😠 Colère",
+        surprised: "😲 Surpris",
+        fearful: "😨 Peur",
+        disgusted: "🤢 Dégoûté"
+    };
+
+    if (liveDisplay) {
+      liveDisplay.textContent = frEmotions[maxEmotion] || maxEmotion;
+    }
+
+    // ✅ OPTIMISATION: Rate-limiting réduit pour 40+ utilisateurs (toutes les 6s au lieu de 3s)
+    // + Sync basée sur changement d'émotion (debouncée) au lieu de fréquence fixe
+    const now = Date.now();
+    if (now - lastSyncTime > SYNC_RATE_LIMIT) {
+      lastSyncTime = now;
+      // Sync périodique light (pas toutes les stats, juste le timestamp)
+      syncLiveEmotionsLight();
+    }
 
     // Dessiner boîte de détection (rectangle vert)
     ctx.strokeStyle = "#4ade80";
@@ -921,15 +1286,13 @@ async function detectEmotions() {
     const { x, y, width, height } = detection.detection.box;
     ctx.strokeRect(x, y, width, height);
 
-    // Afficher l'émotion au-dessus du visage
-    ctx.fillStyle = "#4ade80";
-    ctx.font = "bold 16px Arial";
-    ctx.fillText(maxEmotion.toUpperCase(), x, y - 10);
   } catch (error) {
     // Ne logger que les erreurs critiques, pas les absences de visage
     if (error.message && !error.message.includes("width") && !error.message.includes("height")) {
       console.error("[FACE-API ERROR]", error);
     }
+  } finally {
+    faceDetectionInProgress = false;
   }
 }
 
@@ -945,7 +1308,11 @@ function recordEmotion(emotion, confidence) {
   };
 
   const mappedEmotion = emotionMap[emotion] || emotion;
-  emotionStats[mappedEmotion] = (emotionStats[mappedEmotion] || 0) + 1;
+  
+  // ✅ OPTIMISATION: Ne compter que les émotions avec confiance suffisante
+  if (confidence >= MIN_CONFIDENCE_SYNC) {
+    emotionStats[mappedEmotion] = (emotionStats[mappedEmotion] || 0) + 1;
+  }
 
   emotionHistory.push({
     emotion: mappedEmotion,
@@ -957,56 +1324,37 @@ function recordEmotion(emotion, confidence) {
   if (emotionHistory.length === 1) {
     console.log("[EMOTION] Premier sample détecté:", mappedEmotion, confidence);
   }
+  
+  // ✅ OPTIMISATION: Déclencher sync debounced si l'émotion a changé
+  if (mappedEmotion !== lastSyncedEmotion && confidence >= MIN_CONFIDENCE_SYNC) {
+    debouncedSyncLiveEmotion(mappedEmotion);
+  }
 }
 
-function updateEmotionDisplay() {
-  const total = Object.values(emotionStats).reduce((a, b) => a + b, 0);
-  if (total === 0) return;
-
-  // Calculer les pourcentages
-  const percentages = {
-    happy: Math.round((emotionStats.happy / total) * 100),
-    sad: Math.round((emotionStats.sad / total) * 100),
-    neutral: Math.round((emotionStats.neutral / total) * 100),
-    angry: Math.round((emotionStats.angry / total) * 100),
-    surprised: Math.round((emotionStats.surprised / total) * 100),
-    fearful: Math.round((emotionStats.fearful / total) * 100),
-    disgusted: Math.round((emotionStats.disgusted / total) * 100)
-  };
-
-  // Mettre à jour les barres
-  Object.entries(percentages).forEach(([emotion, pct]) => {
-    const fillElement = document.getElementById(`stat-${emotion}`);
-    const pctElement = document.getElementById(`stat-${emotion}-pct`);
-    if (fillElement) fillElement.style.width = `${pct}%`;
-    if (pctElement) pctElement.textContent = `${pct}%`;
-  });
-
-  // Émotion dominante
-  const dominant = Object.entries(emotionStats).reduce((prev, current) =>
-    prev[1] > current[1] ? prev : current
-  );
+// ✅ FONCTION DE DEBOUNCING pour réduire les écritures Firebase
+function debouncedSyncLiveEmotion(emotion) {
+  // Annuler la sync précédente si elle est en attente
+  if (syncQueue) {
+    clearTimeout(syncQueue);
+  }
   
-  const emotionLabels = {
-    happy: "😊 Heureux",
-    sad: "😢 Triste",
-    neutral: "😐 Neutre",
-    angry: "😠 En colère",
-    surprised: "😲 Surpris",
-    fearful: "😨 Peur",
-    disgusted: "🤢 Dégoûté"
-  };
-
-  document.getElementById("dominantEmotionDisplay").textContent =
-    emotionLabels[dominant[0]] || "En attente...";
+  // Programmer une nouvelle sync avec délai
+  syncQueue = setTimeout(() => {
+    syncLiveEmotions(emotion);
+    syncQueue = null;
+  }, DEBOUNCE_EMOTION_CHANGE);
 }
 
 async function stopEmotionDetection() {
+  // ✅ PROTECTION: Arrêter toute détection en cours
   detectionActive = false;
+  faceDetectionInProgress = false; // Débloquer tout appel en attente
   clearInterval(detectionInterval);
 
   const detectionPanel = document.getElementById("detectionPanel");
-  detectionPanel.classList.add("hidden");
+  if (detectionPanel) detectionPanel.classList.add("hidden");
+  
+  // ✅ Suppression du bouton "Fin de mesure" - pas de masquage
 
   const elapsedSeconds = Math.round((Date.now() - detectionStartTime) / 1000);
 
@@ -1018,8 +1366,55 @@ async function stopEmotionDetection() {
   // Sauvegarder dans Firebase
   await saveEmotionData(currentRoomId, elapsedSeconds);
 
-  // ✅ AFFICHER LES RÉSULTATS
-  displayEmotionResults(elapsedSeconds);
+  // Masquer tout et afficher le message de fin neutre
+  showWebcamSuccessScreen();
+}
+
+async function syncLiveEmotions(currentEmotion) {
+  if (!firebaseApi) return;
+  const participantKey = localStorage.getItem("currentParticipantKey");
+  if (!participantKey) return;
+
+  try {
+    lastSyncedEmotion = currentEmotion;
+    
+    const participantRef = firebaseApi.ref(firebaseApi.db, `rooms/${currentRoomId}/participants/${participantKey}`);
+    
+    // ✅ OPTIMISATION CRITIQUE POUR 40+ USERS: Une SEULE écriture au lieu de 2
+    // Envoyer seulement l'émotion + timestamp (payload minimal)
+    await firebaseApi.update(participantRef, {
+      dominantEmotion: currentEmotion,
+      updatedAt: Date.now()
+    });
+    
+    lastSuccessfulSync = Date.now();
+    
+  } catch (err) {
+    if (err.code === "PERMISSION_DENIED") {
+      console.error("[SYNC] Permission refusée Firebase:", err);
+    } else {
+      console.warn("[SYNC] Échec sync (non-critique):", err.code);
+    }
+  }
+}
+
+// ✅ SYNC LÉGÈRE - Sync périodique heartbeat (toutes les 6s pour 40+ users)
+async function syncLiveEmotionsLight() {
+  if (!firebaseApi) return;
+  const participantKey = localStorage.getItem("currentParticipantKey");
+  if (!participantKey) return;
+
+  try {
+    const participantRef = firebaseApi.ref(firebaseApi.db, `rooms/${currentRoomId}/participants/${participantKey}`);
+    
+    // ✅ ULTRA-LÉGER: Juste un heartbeat confirmer présence active
+    await firebaseApi.update(participantRef, {
+      updatedAt: Date.now()
+    });
+    
+  } catch (err) {
+    console.warn("[SYNC-LIGHT] Heartbeat échoué:", err.code);
+  }
 }
 
 async function saveEmotionData(roomId, duration) {
@@ -1047,37 +1442,31 @@ async function saveEmotionData(roomId, duration) {
     const participant = participantSnap.val();
     const isAnonymous = participant.mode === "anonymous";
 
-    // ✅ NE SAUVEGARDER QUE SI ANONYME
-    if (!isAnonymous) {
-      logFirebase(
-        `Participant nommé (${participant.mode}): données d'émotions NON sauvegardées`,
-        "success"
-      );
-      logAudit(
-        "Participant non-anonyme: émotions detectées mais non stockées (respect confidentialité)."
-      );
-      showInlineMessage("Données d'émotions traitées localement (participant non-anonyme).", false);
-      return;
-    }
-
-    // ✅ SAUVEGARDER POUR LES PARTICIPANTS ANONYMES
+    // Sauvegarder les stats pour alimenter le graphique du prof, 
+    // mais utiliser une clé générique pour les anonymes afin de préserver l'anonymat.
+    const emotionKey = isAnonymous ? `anon_${Date.now()}` : participantKey;
     const emotionDataRef = firebaseApi.ref(
       firebaseApi.db,
-      `rooms/${roomId}/emotions/${participantKey}`
+      `rooms/${roomId}/emotions/${emotionKey}`
     );
 
     const data = {
-      participantKey,
       roomId,
       duration,
       totalSamples: emotionHistory.length,
       emotionStats,
-      emotionHistory,
       recordedAt: Date.now()
     };
 
+    if (!isAnonymous) {
+      data.participantKey = participantKey;
+      // ✅ OPTIMISATION: Ne pas envoyer l'historique complet (trop lourd pour 40+ users)
+      // Gardez juste les stats agrégées
+      // Si besoin d'historique, le faire via un endpoint séparé
+    }
+
     await firebaseApi.set(emotionDataRef, data);
-    logFirebase("Données d'émotions (anonyme) sauvegardées", "success");
+    logFirebase(`Données d'émotions (${isAnonymous ? 'anonyme' : 'nommé'}) sauvegardées`, "success");
 
     // Mettre à jour le participant
     await firebaseApi.set(participantRef, {
@@ -1089,176 +1478,35 @@ async function saveEmotionData(roomId, duration) {
       updatedAt: Date.now()
     });
 
-    showInlineMessage("Données d'émotions enregistrées avec succès ✓", false);
+    showInlineMessage("Données d'émotions traitées avec succès ✓", false);
   } catch (error) {
     logFirebase(`Erreur sauvegarde émotions: ${error.message}`, "error");
     showInlineMessage("Erreur lors de la sauvegarde.", true);
   }
 }
 
-/* AFFICHAGE DES RÉSULTATS */
-function displayEmotionResults(duration) {
-  const resultsPanel = document.getElementById("resultsPanel");
+function showWebcamSuccessScreen() {
   const detectionPanel = document.getElementById("detectionPanel");
+  const resultsPanel = document.getElementById("resultsPanel");
 
-  // Masquer panel détection, afficher résultats
-  detectionPanel.classList.add("hidden");
+  const joinPanel = document.getElementById("joinPanel");
+
+  if (detectionPanel) detectionPanel.classList.add("hidden");
+  if (joinPanel) joinPanel.classList.add("hidden");
+  
+  resultsPanel.innerHTML = `
+    <div style="text-align: center; padding: 40px 20px;">
+      <div style="font-size: 60px; margin-bottom: 16px;">✅</div>
+      <h2 style="color: #10b981; margin-bottom: 10px; font-size: 24px;">Détection terminée !</h2>
+      <p style="color: #475569; font-size: 16px; margin-bottom: 25px; line-height: 1.5;">
+        Merci pour votre participation.<br>
+        Vos données ont bien été enregistrées de manière sécurisée.
+      </p>
+      <button onclick="window.location.href='accueil.html'" style="background: #830c2a; color: white; padding: 12px 28px; border: none; border-radius: 25px; cursor: pointer; font-size: 15px; font-weight: 600; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">Terminer et quitter</button>
+    </div>
+  `;
   resultsPanel.classList.remove("hidden");
-
-  // Calculer l'émotion dominante
-  const dominantEmotion = Object.entries(emotionStats).reduce((prev, current) =>
-    prev[1] > current[1] ? prev : current
-  );
-
-  const emotionLabels = {
-    happy: "😊 Heureux",
-    sad: "😢 Triste",
-    neutral: "😐 Neutre",
-    angry: "😠 En colère",
-    surprised: "😲 Surpris",
-    fearful: "😨 Peur",
-    disgusted: "🤢 Dégoûté"
-  };
-
-  // 1. Mettre à jour stats clés
-  document.getElementById("resultDuration").textContent = `${duration}s`;
-  document.getElementById("resultSamples").textContent = emotionHistory.length;
-  document.getElementById("resultDominant").textContent = 
-    emotionLabels[dominantEmotion[0]] || "Neutre";
-
-  // 2. Générer le graphique
-  generateEmotionChart();
-
-  // 3. Remplir le tableau détails
-  populateEmotionTable();
-
-  console.log("[RESULTS] Résultats affichés ✓");
 }
-
-function generateEmotionChart() {
-  const chartContainer = document.getElementById("emotionChart");
-  const total = Object.values(emotionStats).reduce((a, b) => a + b, 0);
-
-  if (total === 0) {
-    chartContainer.innerHTML = "<p>Aucune émotion détectée</p>";
-    return;
-  }
-
-  // Créer graphique en barres horizontal avec SVG
-  const emotionOrder = ["happy", "sad", "neutral", "angry", "surprised", "fearful", "disgusted"];
-  const emotionLabels = {
-    happy: "😊 Heureux",
-    sad: "😢 Triste",
-    neutral: "😐 Neutre",
-    angry: "😠 En colère",
-    surprised: "😲 Surpris",
-    fearful: "😨 Peur",
-    disgusted: "🤢 Dégoûté"
-  };
-
-  const emotionColors = {
-    happy: "#FFEB3B",
-    sad: "#2196F3",
-    neutral: "#9E9E9E",
-    angry: "#F44336",
-    surprised: "#FF9800",
-    fearful: "#673AB7",
-    disgusted: "#4CAF50"
-  };
-
-  let svg = '<svg viewBox="0 0 400 280" xmlns="http://www.w3.org/2000/svg">';
-
-  // Titre
-  svg += '<text x="200" y="20" font-size="16" font-weight="bold" text-anchor="middle" fill="#333">Répartition des Émotions</text>';
-
-  // Barres
-  let yPos = 50;
-  emotionOrder.forEach((emotion) => {
-    const count = emotionStats[emotion] || 0;
-    const percentage = Math.round((count / total) * 100);
-    const barWidth = (percentage / 100) * 250;
-
-    // Barre
-    svg += `<rect x="100" y="${yPos}" width="${barWidth}" height="20" fill="${emotionColors[emotion]}" rx="3"/>`;
-
-    // Label
-    svg += `<text x="10" y="${yPos + 15}" font-size="12" fill="#333">${emotionLabels[emotion]}</text>`;
-
-    // Pourcentage
-    svg += `<text x="${105 + barWidth}" y="${yPos + 15}" font-size="11" font-weight="bold" fill="#333">${percentage}%</text>`;
-
-    yPos += 30;
-  });
-
-  svg += '</svg>';
-
-  chartContainer.innerHTML = svg;
-}
-
-function populateEmotionTable() {
-  const tableBody = document.getElementById("emotionTableBody");
-  const total = Object.values(emotionStats).reduce((a, b) => a + b, 0);
-
-  const emotionLabels = {
-    happy: "😊 Heureux",
-    sad: "😢 Triste",
-    neutral: "😐 Neutre",
-    angry: "😠 En colère",
-    surprised: "😲 Surpris",
-    fearful: "😨 Peur",
-    disgusted: "🤢 Dégoûté"
-  };
-
-  tableBody.innerHTML = "";
-
-  const emotionOrder = ["happy", "sad", "neutral", "angry", "surprised", "fearful", "disgusted"];
-
-  emotionOrder.forEach((emotion) => {
-    const count = emotionStats[emotion] || 0;
-    const percentage = total > 0 ? Math.round((count / total) * 100) : 0;
-
-    const row = `
-      <tr>
-        <td>${emotionLabels[emotion]}</td>
-        <td>${count}</td>
-        <td>${percentage}%</td>
-      </tr>
-    `;
-
-    tableBody.innerHTML += row;
-  });
-}
-
-/* HANDLERS BOUTONS RÉSULTATS */
-document.addEventListener("DOMContentLoaded", () => {
-  const repeatBtn = document.getElementById("repeatDetectionBtn");
-  const returnBtn = document.getElementById("returnHomeBtn");
-
-  if (repeatBtn) {
-    repeatBtn.onclick = () => {
-      // Réinitialiser et recommencer
-      const resultsPanel = document.getElementById("resultsPanel");
-      resultsPanel.classList.add("hidden");
-      
-      detectionActive = false;
-      clearInterval(detectionInterval);
-      emotionHistory = [];
-      emotionStats = {
-        happy: 0, sad: 0, neutral: 0, angry: 0,
-        surprised: 0, fearful: 0, disgusted: 0
-      };
-
-      startEmotionDetection();
-    };
-  }
-
-  if (returnBtn) {
-    returnBtn.onclick = () => {
-      // Retour à l'accueil
-      window.location.href = "accueil.html";
-    };
-  }
-});
 
 /* PRÊT POUR FACE-API.JS */
 async function initializeFaceApi() {
@@ -1271,17 +1519,28 @@ async function initializeFaceApi() {
 
     logFirebase("Initialisation Face-API...");
 
-    // Charger les modèles depuis le CDN
-    const MODEL_URL = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/";
+    // Charger les modèles depuis le CDN avec une version stable
+    const MODEL_URL = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/model/";
 
-    await Promise.all([
-      faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-      faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL)
-    ]);
-
-    faceApiReady = true;
-    logFirebase("Face-API initialisé avec succès ✓", "success");
+    try {
+      await Promise.all([
+        faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+        faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL)
+      ]);
+      
+      faceApiReady = true;
+      logFirebase("Face-API initialisé avec succès ✓", "success");
+      console.log("[FACE-API] Modèles chargés avec succès");
+      
+    } catch (networkError) {
+      // Erreur réseau lors du chargement des modèles
+      console.error("[FACE-API] Erreur réseau chargement modèles:", networkError);
+      logFirebase(`Erreur réseau modèles Face-API: ${networkError.message}`, "error");
+      faceApiReady = false;
+    }
+    
   } catch (error) {
+    console.error("[FACE-API] Erreur initialisation:", error);
     logFirebase(`Erreur initialisation Face-API: ${error.message}`, "error");
     faceApiReady = false;
   }
@@ -1289,13 +1548,104 @@ async function initializeFaceApi() {
 
 // Initialiser Face-API au chargement de la page
 window.addEventListener("load", () => {
+  console.log("[APP] Initialisation Face-API au chargement de la page...");
   initializeFaceApi();
 });
 
-const initialRoomId = resolveRoomId();
-if (/^[A-Z]{4}\d{4}$/.test(initialRoomId)) {
-  roomCodeInput.value = initialRoomId;
-  currentRoomId = initialRoomId;
-}
+// ✅ INITIALISATION COMPLÈTE AU CHARGEMENT DU DOM
+document.addEventListener("DOMContentLoaded", () => {
+  console.log("[INIT] DOMContentLoaded - initialisation des références DOM...");
+  
+  // 1. Initialiser les références DOM
+  initializeDOMReferences();
+  
+  // 2. Pré-remplir le code de la salle
+  const initialRoomId = resolveRoomId();
+  if (initialRoomId && /^[A-Z]{4}\d{4}$/.test(initialRoomId)) {
+    if (roomCodeInput) {
+      roomCodeInput.value = initialRoomId;
+      currentRoomId = initialRoomId;
+      console.log("[INIT] Code salle pré-rempli depuis:", 
+        localStorage.getItem("currentRoomCode") ? "localStorage" : "URL/input");
+    }
+  }
+  
+  // 3. Initialiser le bouton rejoindre
+  const joinBtn = document.getElementById("joinBtn");
+  if (joinBtn) {
+    joinBtn.onclick = async () => {
+      if (!firebaseApi) {
+        await initFirebase();
+      }
+
+      const roomId = roomCodeInput.value.trim();
+      currentRoomId = roomId;
+
+      if (!/^[A-Z]{4}\d{4}$/.test(roomId)) {
+        showInlineMessage("Code de salle invalide (format attendu: ABCD1234)", true);
+        return;
+      }
+
+      // Sécurité : Si on change de salle, on oublie l'ancienne identité pour éviter les fuites
+      const oldRoom = localStorage.getItem("currentRoomCode");
+      if (oldRoom && oldRoom !== roomId) {
+        localStorage.removeItem("currentParticipantKey");
+        console.log("[JOIN] Nouvelle salle détectée, réinitialisation de l'identité participant.");
+      }
+
+      localStorage.setItem("currentRoomCode", roomId);
+
+      subscribeActivityStatus(roomId);
+      subscribeSupplementaryQuestionnaires(roomId);
+
+      if (useCamera) {
+        document.getElementById("joinBtn").style.display = "none";
+        
+        const consent = await requestWebcamConsent();
+
+        if (!consent) {
+          showInlineMessage("Participation sans webcam. Veuillez remplir le questionnaire ci-dessous.", false);
+          await saveJoinMode(roomId, "questionnaire");
+          
+          // Masquer le panneau de connexion et afficher le bouton quitter
+          const joinPanel = document.getElementById("joinPanel");
+          if (joinPanel) joinPanel.classList.add("hidden");
+          
+          // Ouvrir le questionnaire
+          await openQuestionnaireFlow(roomId);
+          const leaveBtn = document.getElementById("leaveBtn");
+          if (leaveBtn) leaveBtn.classList.remove("hidden");
+          
+          return;
+        }
+
+        // ✅ DÉMARRAGE WEBCAM
+        await startCamera();
+        
+        // Masquer le panneau de connexion
+        const joinPanel = document.getElementById("joinPanel");
+        if (joinPanel) joinPanel.classList.add("hidden");
+        
+        // Afficher la vidéo
+        if (videoBox) videoBox.classList.remove("hidden");
+        
+        // Charger les questions (indépendant du statut d'activité)
+        await openQuestionnaireFlow(roomId);
+        
+        // ✅ LANCER LA DÉTECTION SEULEMENT SI L'ACTIVITÉ EST RUNNING
+        if (currentActivityStatus === "running") {
+          showInlineMessage("Webcam activée... Veuillez également remplir le questionnaire ci-dessous.");
+          await startEmotionDetection();
+        } else {
+          showInlineMessage("Webcam activée. En attente du lancement de l'activité par le professeur...");
+        }
+
+        // Afficher le bouton quitter
+        const leaveBtn = document.getElementById("leaveBtn");
+        if (leaveBtn) leaveBtn.classList.remove("hidden");
+      }
+    };
+  }
+});
 
 initFirebase();

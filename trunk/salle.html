@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="fr">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,10 +8,34 @@
     <link rel="stylesheet" href="salle.css">
     <!-- Chart.js pour les graphiques -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+    <style>
+    .modal {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5);
+      display: flex;
+      align-items: center; justify-content: center;
+      z-index: 9999;
+    }
+    .modal.hidden { display: none !important; }
+    .modal-content {
+      background: white; padding: 25px; border-radius: 12px;
+      max-width: 400px; text-align: center;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    }
+    .modal-actions {
+      display: flex; gap: 10px; justify-content: center; margin-top: 20px;
+    }
+    .btn-secondary { background: #f1f5f9; color: #475569; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; }
+    .btn-danger { background: #ef4444; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; }
+    .btn-secondary:hover { background: #e2e8f0; }
+    .btn-danger:hover { background: #dc2626; }
+    </style>
 </head>
+
 <body>
 
-    <!-- ===== En-tête ===== -->
+    <!-- En-tête -->
     <header>
         <div class="header-inner">
             <div class="header-left">
@@ -37,7 +62,7 @@
         </div>
     </header>
 
-    <!-- ===== Contenu principal ===== -->
+    <!-- Contenu principal -->
     <main>
 
         <!-- Carte participants -->
@@ -57,10 +82,84 @@
                 </div>
             </div>
 
-            <!-- ===== SECTION GRAPHIQUES ÉMOTIONS ===== -->
+
+            <!-- INFOS DE SESSION -->
+            <div class="session-info"
+                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; padding: 15px; background: #f8fafc; border-radius: 8px; margin-top: 20px; font-size: 13px; color: #475569;">
+                <div class="info-item">
+                    <span class="info-label" style="display: block; font-weight: bold; color: #6d0b24;">📅 Date</span>
+                    <span id="infoDate">—</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label" style="display: block; font-weight: bold; color: #6d0b24;">⏱️ Durée</span>
+                    <span id="infoDuree">—</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label" style="display: block; font-weight: bold; color: #6d0b24;">👤
+                        Professeur</span>
+                    <span id="infoProf">—</span>
+                </div>
+            </div>
+
+            <!-- OPTIONS ACTIVES -->
+            <div id="optionsActives" class="options-actives"
+                style="display: flex; gap: 8px; flex-wrap: wrap; margin: 15px 0;"></div>
+
+            <!-- Graphiques -->
             <div id="emotionDashboard" class="emotion-dashboard hidden">
                 <h2 class="section-title">📊 Suivi en Temps Réel des Émotions</h2>
-                <p class="section-subtitle" id="dashboardSubtitle">Analyse des émotions des participants dans la salle</p>
+                <p class="section-subtitle" id="dashboardSubtitle">Analyse des émotions des participants dans la salle
+                </p>
+
+                <!-- GRILLE KPI -->
+                <div class="kpi-grid" id="kpiGrid"
+                    style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 30px;">
+                    <div class="kpi-card"
+                        style="background: white; padding: 15px; border-radius: 12px; border: 1px solid #e2e8f0; text-align: center;">
+                        <span class="kpi-label"
+                            style="display: block; font-size: 12px; color: #64748b; text-transform: uppercase; margin-bottom: 5px;">Participants</span>
+                        <span class="kpi-value" id="kpiParticipants"
+                            style="font-size: 24px; font-weight: bold; color: #6d0b24;">0</span>
+                    </div>
+                    <div class="kpi-card"
+                        style="background: white; padding: 15px; border-radius: 12px; border: 1px solid #e2e8f0; text-align: center;">
+                        <span class="kpi-label"
+                            style="display: block; font-size: 12px; color: #64748b; text-transform: uppercase; margin-bottom: 5px;">Questionnaires</span>
+                        <span class="kpi-value" id="kpiQuestionnaires"
+                            style="font-size: 24px; font-weight: bold; color: #6d0b24;">0</span>
+                    </div>
+                    <div class="kpi-card"
+                        style="background: white; padding: 15px; border-radius: 12px; border: 1px solid #e2e8f0; text-align: center;">
+                        <span class="kpi-label"
+                            style="display: block; font-size: 12px; color: #64748b; text-transform: uppercase; margin-bottom: 5px;">Webcams</span>
+                        <span class="kpi-value" id="kpiWebcams"
+                            style="font-size: 24px; font-weight: bold; color: #6d0b24;">0</span>
+                    </div>
+                    <div class="kpi-card"
+                        style="background: white; padding: 15px; border-radius: 12px; border: 1px solid #e2e8f0; text-align: center;">
+                        <span class="kpi-label"
+                            style="display: block; font-size: 12px; color: #64748b; text-transform: uppercase; margin-bottom: 5px;">Score
+                            Subjectif</span>
+                        <span class="kpi-value" id="kpiSubjectif"
+                            style="font-size: 24px; font-weight: bold; color: #6d0b24;">—</span>
+                    </div>
+                    <div class="kpi-card"
+                        style="background: white; padding: 15px; border-radius: 12px; border: 1px solid #e2e8f0; text-align: center;">
+                        <span class="kpi-label"
+                            style="display: block; font-size: 12px; color: #64748b; text-transform: uppercase; margin-bottom: 5px;">Score
+                            Objectif</span>
+                        <span class="kpi-value" id="kpiObjectif"
+                            style="font-size: 24px; font-weight: bold; color: #6d0b24;">—</span>
+                    </div>
+                    <div class="kpi-card"
+                        style="background: white; padding: 15px; border-radius: 12px; border: 1px solid #e2e8f0; text-align: center; border-color: #6d0b24;">
+                        <span class="kpi-label"
+                            style="display: block; font-size: 12px; color: #6d0b24; text-transform: uppercase; font-weight: bold; margin-bottom: 5px;">Score
+                            Global</span>
+                        <span class="kpi-value" id="kpiGlobal"
+                            style="font-size: 24px; font-weight: bold; color: #6d0b24;">—</span>
+                    </div>
+                </div>
 
                 <!-- GRAPHIQUES -->
                 <div class="charts-grid">
@@ -105,119 +204,86 @@
 
                 <!-- LISTE PARTICIPANTS AVEC ÉMOTIONS -->
                 <div class="participants-emotions">
-                    <h3>Participants Connectés</h3>
-                    <div id="participantsEmotionsList" class="participants-list">
-                        <!-- Rempli dynamiquement -->
-                    </div>
+                    <h3>Répartition des émotions (temps réel)</h3>
+                    <div id="emotionRows" class="emotion-rows" style="margin-bottom: 20px;"></div>
+
                 </div>
             </div>
 
-            <!-- Séparateur -->
-            <hr class="divider">
 
-            <!-- Infos de session -->
-            <div class="session-info">
-                <div class="info-item">
-                    <span class="info-icon">📅</span>
-                    <div>
-                        <span class="info-label">Date</span>
-                        <span class="info-value" id="infoDate">—</span>
-                    </div>
-                </div>
-                <div class="info-item">
-                    <span class="info-icon">⏱️</span>
-                    <div>
-                        <span class="info-label">Durée prévue</span>
-                        <span class="info-value" id="infoDuree">—</span>
-                    </div>
-                </div>
-                <div class="info-item">
-                    <span class="info-icon">👤</span>
-                    <div>
-                        <span class="info-label">Professeur</span>
-                        <span class="info-value" id="infoProf">—</span>
-                    </div>
-                </div>
-                <div class="info-item">
-                    <span class="info-icon">📷</span>
-                    <div>
-                        <span class="info-label">Webcam</span>
-                        <span class="info-value" id="infoWebcam">—</span>
-                    </div>
-                </div>
+
+            <!-- Contrôles d'activité -->
+            <div class="activity-controls" style="display: flex; gap: 10px; margin-top: 20px;">
+                <button class="btn btn-toggle-activity" type="button" id="btnToggleActivity" onclick="toggleActivity()"
+                    style="width: 100%; border-radius: 25px; padding: 12px; cursor: pointer; font-weight: 600; border: none; color: white; background: #6d0b24;">
+                    Lancer l'activité
+                </button>
             </div>
-
-            <!-- Options activées -->
-            <div class="options-actives" id="optionsActives"></div>
-
-            <div class="kpi-grid" id="kpiGrid">
-                <div class="kpi-card">
-                    <span class="kpi-label">Participants</span>
-                    <span class="kpi-value" id="kpiParticipants">0</span>
-                </div>
-                <div class="kpi-card">
-                    <span class="kpi-label">Questionnaires validés</span>
-                    <span class="kpi-value" id="kpiQuestionnaires">0</span>
-                </div>
-                <div class="kpi-card">
-                    <span class="kpi-label">Score subjectif moyen</span>
-                    <span class="kpi-value" id="kpiSubjectif">—</span>
-                </div>
-                <div class="kpi-card">
-                    <span class="kpi-label">Score objectif moyen</span>
-                    <span class="kpi-value" id="kpiObjectif">—</span>
-                </div>
-                <div class="kpi-card kpi-card-accent">
-                    <span class="kpi-label">Score global</span>
-                    <span class="kpi-value" id="kpiGlobal">—</span>
-                </div>
-            </div>
-
-            <div class="progress-block">
-                <div class="progress-head">
-                    <span>Progression des réponses</span>
-                    <strong id="progressLabel">0%</strong>
-                </div>
-                <div class="progress-track">
-                    <div class="progress-bar" id="progressBar"></div>
-                </div>
-            </div>
-
-            <div class="comparison-box" id="comparisonBox">
-                Comparaison en attente de données suffisantes.
-            </div>
-
-            <div class="emotion-board">
-                <h3>Répartition des émotions (temps réel)</h3>
-                <div id="emotionRows" class="emotion-rows"></div>
-            </div>
-
-            <!-- Bouton lancer -->
-            <button class="btn btn-lancer" type="button" id="btnLancer"
-                    onclick="lancerActivite()" disabled>
-                  Lancer l'activité
-            </button>
 
             <p class="hint-lancer" id="hintLancer">
                 En attente d'au moins 1 participant pour lancer.
             </p>
 
+            <!-- ✅ QUESTIONNAIRE SUPPLÉMENTAIRE -->
+            <div style="margin-top: 25px; padding: 15px; background: #f0f9ff; border-radius: 12px; border: 1px solid #bae6fd;">
+                <h3 style="margin-top: 0; color: #0f172a; font-size: 16px;">📋 Questionnaire supplémentaire</h3>
+                <p style="color: #475569; font-size: 13px; margin: 8px 0;">Envoyer un questionnaire à tout moment pendant la session</p>
+                <button class="btn" type="button" id="btnSendQuestionnaire" onclick="sendQuestionnaireToParticipants()" 
+                    style="width: 100%; border-radius: 25px; padding: 10px; cursor: pointer; font-weight: 600; border: none; color: white; background: #0ea5e9; transition: all 0.2s;">
+                    📨 Envoyer un questionnaire
+                </button>
+            </div>
+            
+            <!-- Lien options de la salle -->
+            <div style="text-align: center; margin-top: 20px;">
+                <a href="create.html" style="display: inline-block; border-radius: 25px; padding: 10px 20px; font-size: 14px; font-weight: 600; border: 2px solid #6d0b24; color: #6d0b24; text-decoration: none; background: white; transition: all 0.2s;">
+                    ⚙️ Retour au menu
+                </a>
+            </div>
+
             <!-- Lien retour -->
             <p class="retour">
-                <a href="create.html">← Retour à la salle</a>
+                <a href="dashboard-prof.html">← Retour au tableau de bord</a>
             </p>
 
         </div>
 
     </main>
 
-    <!-- ===== Pied de page ===== -->
+    <!-- Pied de page -->
     <footer>
         <p>🔒 Consentement explicite • Webcam optionnelle • Données anonymisées • Aucune image conservée</p>
         <p>© 2026 — Projet L2T1 — Université Paris Cité</p>
     </footer>
 
+    <!-- Modale de déconnexion -->
+    <div id="disconnectModal" class="modal hidden">
+        <div class="modal-content">
+            <h3>Confirmation de déconnexion</h3>
+            <p>Êtes-vous sûr de vouloir vous déconnecter ?<br>Cela fermera la salle et effacera toutes les données de
+                session en cours.</p>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" id="cancelDisconnectBtn">Annuler</button>
+                <button class="btn btn-danger" id="confirmDisconnectBtn">Déconnecter et Fermer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modale de confirmation de fin d'activité -->
+    <div id="stopModal" class="modal hidden">
+        <div class="modal-content">
+            <h3>Arrêter définitivement l'activité ?</h3>
+            <p>Êtes-vous sûr de vouloir arrêter cette session ?<br>Une fois arrêtée, il ne sera plus possible de la
+                relancer pour cette salle.</p>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" id="cancelStopBtn">Annuler</button>
+                <button class="btn btn-danger" id="confirmStopBtn">Arrêter définitivement</button>
+            </div>
+        </div>
+    </div>
+
     <script src="salle.js"></script>
 
 </body>
+
 </html>

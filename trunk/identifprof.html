@@ -16,23 +16,23 @@
     <!-- CONTENU -->
     <main class="container">
         <div class="card">
-            <form>
+            <form id="loginForm">
 
                 <label for="email">Mail institutionnel</label>
                 <input
                     type="email"
                     id="email"
-                    placeholder="prenom.nom@u-paris.fr"
+                    placeholder="votre.email@ecole.fr"
                 >
 
-                <label for="matiere">Matière</label>
+                <label for="password">Mot de passe</label>
                 <input
-                    type="text"
-                    id="matiere"
-                    placeholder="Matière"
+                    type="password"
+                    id="password"
+                    placeholder="Votre mot de passe"
                 >
 
-                <a href="#" class="btn" id="loginBtn">Se connecter</a>
+                <button type="submit" class="btn" id="loginBtn" style="border:none; cursor:pointer; width: 100%; display: block; font: inherit; padding: 12px; margin-top: 15px;">Se connecter</button>
 
                 <p class="error-message" id="loginError"></p>
 

@@ -21,10 +21,6 @@ function logFirebase(message, type = "info") {
   console.info(prefix, message);
 }
 
-function logAudit(message) {
-  console.info(`[AUDIT] ${message}`);
-}
-
 function getFirebaseErrorMessage(error) {
   const code = error?.code || "";
   const message = error?.message || "";
@@ -98,8 +94,8 @@ document.getElementById("joinForm").addEventListener("submit", async e => {
     }
 
     // Email étudiant
-    if (!/^[a-z]+\.[a-z]+@etu\.u-paris\.fr$/i.test(studentEmail.value)) {
-      errorMsg.textContent = "Le mail étudiant doit être du type prenom.nom@etu.u-paris.fr";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/i.test(studentEmail.value)) {
+      errorMsg.textContent = "Le format du mail étudiant est invalide.";
       return;
     }
   }
@@ -155,7 +151,6 @@ document.getElementById("joinForm").addEventListener("submit", async e => {
     logFirebase(`Ecriture participant dans rooms/${roomId}/participants/${newParticipantRef.key} ...`);
     await set(newParticipantRef, payload);
     logFirebase(`Participant enregistre (key=${newParticipantRef.key})`, "success");
-    logAudit("Enregistrement participant en salle : conforme au besoin de collecte de donnees (CDC 6.1/6.2). ");
 
     localStorage.setItem("currentRoomCode", roomId);
     localStorage.setItem("currentParticipantKey", newParticipantRef.key || "");

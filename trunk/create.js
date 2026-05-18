@@ -22,7 +22,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
   const copyBtn = document.getElementById("copyBtn");
   const mailBtn = document.getElementById("mailBtn");
-  const waitingRoomLink = document.getElementById("waitingRoomLink");
   const followRoomLink = document.getElementById("followRoomLink");
   const accessResultsBtn = document.getElementById("accessResultsBtn");
   const roomCode = document.getElementById("roomCode");
@@ -37,13 +36,17 @@ document.addEventListener("DOMContentLoaded", function () {
   roomCode.innerText = roomId;
   localStorage.setItem("currentRoomCode", roomId);
 
+  // Gestion du rafraîchissement de la page
+  if (forceNewRoom || (!urlCode && !storedCode)) {
+    const newUrl = new URL(window.location);
+    newUrl.searchParams.delete("new");
+    newUrl.searchParams.set("room", roomId);
+    window.history.replaceState({}, document.title, newUrl);
+  }
+
   const updateNavigationLinks = () => {
     const code = roomCode.innerText.trim();
     if (!code) return;
-
-    if (waitingRoomLink) {
-      waitingRoomLink.href = `voirlasalle.html?room=${encodeURIComponent(code)}`;
-    }
 
     if (followRoomLink) {
       followRoomLink.href = `salle.html?room=${encodeURIComponent(code)}`;
@@ -104,7 +107,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   })();
 
-  // ===== COPIE DU CODE (VERSION GARANTIE) =====
+  // Gestion de la copie du code
   copyBtn.addEventListener("click", function (e) {
     e.preventDefault();
     e.stopPropagation();
@@ -130,14 +133,14 @@ document.addEventListener("DOMContentLoaded", function () {
     }, 2500);
   });
 
-  // ===== OUVERTURE BOÎTE MAIL =====
+  // Ouverture du client de messagerie
   mailBtn.addEventListener("click", function (e) {
     e.preventDefault();
     e.stopPropagation();
 
     const code = roomCode.innerText;
     const link = window.location.origin + window.location.pathname.replace("create.html", "access.html");
-    
+
     const subject = encodeURIComponent("🎓 Rejoignez mon activité - Emotion Monitoring");
     const body = encodeURIComponent(
       "Bonjour,\n\n" +

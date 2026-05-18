@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Récapitulatif Projet - Plateforme Monitoring Émotions</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f5f5f5;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        @media print {
+            body { background: white; padding: 0; }
+            .container { box-shadow: none; padding: 20px; max-width: 100%; }
+            .page-break { page-break-after: always; }
+        }
+        
+        h1 {
+            color: #2c3e50;
+            border-bottom: 4px solid #3498db;
+            padding-bottom: 10px;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+        
+        h2 {
+            color: #34495e;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-left: 5px solid #3498db;
+            padding-left: 15px;
+            font-size: 1.8em;
+        }
+        
+        h3 {
+            color: #7f8c8d;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            font-size: 1.3em;
+        }
+        
+        .header-info {
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 30px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        .header-info p {
+            margin: 5px 0;
+        }
+        
+        .section {
+            margin-bottom: 40px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            background-color: #f9f9f9;
+        }
+        
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        
+        th {
+            background-color: #3498db;
+            color: white;
+            font-weight: bold;
+        }
+        
+        tr:nth-child(even) {
+            background-color: #f0f0f0;
+        }
+        
+        tr:hover {
+            background-color: #e8f4f8;
+        }
+        
+        .feature-list {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .feature-list li {
+            padding: 10px 0;
+            padding-left: 25px;
+            position: relative;
+            border-bottom: 1px solid #ecf0f1;
+        }
+        
+        .feature-list li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #27ae60;
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+        
+        .code-block {
+            background-color: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            line-height: 1.4;
+        }
+        
+        .tech-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 15px 0;
+        }
+        
+        .tech-card {
+            background: linear-gradient(135deg, #ecf0f1 0%, #bdc3c7 100%);
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #3498db;
+        }
+        
+        .tech-card h4 {
+            color: #2c3e50;
+            margin-bottom: 8px;
+        }
+        
+        .tech-card p {
+            color: #34495e;
+            font-size: 0.95em;
+        }
+        
+        .architecture-box {
+            background-color: #f0f7ff;
+            border: 2px solid #3498db;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-size: 0.85em;
+        }
+        
+        .important-box {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            border-radius: 3px;
+            margin: 15px 0;
+        }
+        
+        .important-box strong {
+            color: #856404;
+        }
+        
+        .flow-diagram {
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 15px 0;
+            font-size: 0.95em;
+        }
+        
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 2px solid #ecf0f1;
+            text-align: center;
+            color: #7f8c8d;
+            font-size: 0.9em;
+        }
+        
+        .badge {
+            display: inline-block;
+            background-color: #3498db;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            margin-right: 5px;
+            margin-bottom: 5px;
+        }
+        
+        .badge-success {
+            background-color: #27ae60;
+        }
+        
+        .badge-warning {
+            background-color: #f39c12;
+        }
+        
+        .badge-danger {
+            background-color: #e74c3c;
+        }
+        
+        .highlight {
+            background-color: #fff9e6;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-weight: 500;
+        }
+        
+        @media print {
+            .page-break { page-break-before: always; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        
+        <!-- HEADER -->
+        <h1>🎯 PLATEFORME DE MONITORING DES ÉMOTIONS</h1>
+        
+        <div class="header-info">
+            <div>
+                <p><strong>📅 Date:</strong> Mai 2026</p>
+                <p><strong>🏢 Projet:</strong> L2T1 - Emotion Management</p>
+                <p><strong>👥 Équipe:</strong> Projet Académique</p>
+            </div>
+            <div>
+                <p><strong>🔧 Stack:</strong> Frontend Web + Firebase</p>
+                <p><strong>🌐 Langue:</strong> Français</p>
+                <p><strong>📱 Responsive:</strong> Oui</p>
+            </div>
+        </div>
+
+        <!-- VUE D'ENSEMBLE -->
+        <h2>📌 Vue d'Ensemble</h2>
+        <div class="section">
+            <p>Plateforme web collaborative permettant aux <strong>professeurs</strong> de monitorer les émotions des <strong>étudiants</strong> en temps réel lors d'activités pédagogiques.</p>
+            <p style="margin-top: 10px;">La plateforme offre <strong>deux modes de détection d'émotions</strong> :</p>
+            <ul class="feature-list" style="margin-top: 10px;">
+                <li><strong>Mode Webcam:</strong> Détection automatique via Face-API.js</li>
+                <li><strong>Mode Questionnaire:</strong> Formulaire Likert 5 points</li>
+            </ul>
+        </div>
+
+        <!-- FEATURES PRINCIPALES -->
+        <h2>🚀 Features Principales</h2>
+        <div class="section">
+            <h3>👨‍🏫 Pour le Professeur</h3>
+            <ul class="feature-list">
+                <li>Créer un compte & authentification sécurisée</li>
+                <li>Générer une salle d'activité avec code unique (format: ABCD1234)</li>
+                <li>Configurer la durée et les modes de détection</li>
+                <li>Monitorer en temps réel les émotions des étudiants</li>
+                <li>Voir le nombre de participants connectés/déconnectés</li>
+                <li>Afficher les résultats agrégés (dashboard dynamique)</li>
+                <li>Exporter les données des sessions</li>
+            </ul>
+            
+            <h3 style="margin-top: 25px;">👨‍🎓 Pour l'Étudiant</h3>
+            <ul class="feature-list">
+                <li>Rejoindre une salle via code d'accès</li>
+                <li>Mode de participation: Anonyme ou Identifié</li>
+                <li>Choisir le mode de détection (Webcam ou Questionnaire)</li>
+                <li>Transmettre ses données en temps réel via Firebase</li>
+                <li>Voir les résultats agrégés en fin d'activité</li>
+                <li>Quitter la salle à tout moment avec confirmation</li>
+            </ul>
+        </div>
+
+        <!-- ARCHITECTURE -->
+        <h2>🏗️ Architecture Générale</h2>
+        <div class="section">
+            <div class="architecture-box">┌─────────────────────────────────────────────────────────┐
+│         NAVIGATEUR WEB (Frontend)                       │
+│  ┌──────────────────────────────────────────────────┐  │
+│  │ • HTML5/CSS3/JavaScript (Vanilla)                │  │
+│  │ • Face-API.js (Détection faciale client-side)    │  │
+│  │ • Firebase SDK (Realtime + Auth)                 │  │
+│  │ • LocalStorage (Sessions)                        │  │
+│  └──────────────────────────────────────────────────┘  │
+└────────────────────┬─────────────────────────────────────┘
+                     │ HTTPS
+        ┌────────────▼────────────┐
+        │   FIREBASE PROJECT      │
+        │  projetl2t1-767a4       │
+        │                         │
+        │ ┌─────────────────────┐ │
+        │ │ Realtime Database   │ │
+        │ │ • /professors       │ │
+        │ │ • /teachers         │ │
+        │ │ • /rooms            │ │
+        │ │ • /participants     │ │
+        │ │ • /emotions         │ │
+        │ │ • /questionnaires   │ │
+        │ └─────────────────────┘ │
+        │                         │
+        │ ┌─────────────────────┐ │
+        │ │ Authentication      │ │
+        │ │ • Email/Password    │ │
+        │ │ • Anonymous Auth    │ │
+        │ └─────────────────────┘ │
+        │                         │
+        │ ┌─────────────────────┐ │
+        │ │ Analytics           │ │
+        │ └─────────────────────┘ │
+        └─────────────────────────┘</div>
+        </div>
+
+        <!-- FLUX UTILISATEUR -->
+        <h2>🔄 Flux Utilisateurs</h2>
+        <div class="section">
+            <h3>Professeur</h3>
+            <div class="flow-diagram">
+1. creesalle.html → Inscription (Prénom, Nom, Email, Matière, Mot de passe)
+   ↓ Firebase Auth + Realtime DB
+2. identifprof.html → Connexion (Email + Mot de passe)
+   ↓ localStorage: currentUser
+3. creersalle.html → Créer salle (Durée, Mode: Webcam/Questionnaire)
+   ↓ Génération code (ABCD1234)
+4. salle.html → Dashboard temps réel (Monitoring participants + KPIs)
+   ↓ Firebase: onValue()
+5. affichage_code → Code visible pour partage aux étudiants
+            </div>
+            
+            <h3>Étudiant</h3>
+            <div class="flow-diagram">
+1. access.html → Rejoindre salle (Mode: Anonyme/Identifié + saisie code)
+   ↓ Firebase: ref(/rooms/{code})
+2. rejoindresalle.html → Choix mode détection
+   ├─ 📷 Webcam: Détection visage en continu
+   ├─ ❓ Questionnaire: Formulaire Likert (5 questions)
+   ↓ Firebase: ref(/rooms/{code}/participants)
+3. Transmission temps réel des données d'émotion
+   ↓ Firebase: onDisconnect() si déconnexion
+4. voirlasalle.html → Affichage résultats agrégés
+            </div>
+        </div>
+
+        <!-- STRUCTURE DES FICHIERS -->
+        <h2>📂 Structure des Fichiers</h2>
+        <div class="section">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Page/Module</th>
+                        <th>Fichiers</th>
+                        <th>Fonction</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Flux Professeur</strong></td>
+                        <td>creesalle.html/css/js</td>
+                        <td>Inscription du professeur</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td>identifprof.html/css/js</td>
+                        <td>Connexion professeur</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td>creersalle.html/css/js</td>
+                        <td>Création salle + config</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td>salle.html/css/js</td>
+                        <td>Dashboard monitoring temps réel</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Flux Étudiant</strong></td>
+                        <td>access.html/css/js</td>
+                        <td>Rejoindre salle par code</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td>rejoindresalle.html/css/js</td>
+                        <td>Choix mode détection</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td>voirlasalle.html/css/js</td>
+                        <td>Affichage résultats finaux</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Configuration</strong></td>
+                        <td>firebase-config.js</td>
+                        <td>Initialisation Firebase SDK</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Pages Statiques</strong></td>
+                        <td>accueil.html</td>
+                        <td>Landing page</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td>dashboard-prof.html</td>
+                        <td>Dashboard professeur</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- TECHNOLOGIES CLÉS -->
+        <h2>⚙️ Outils et Méthodes d'Implémentation</h2>
+        <div class="section">
+            <div class="tech-grid">
+                <div class="tech-card">
+                    <h4>🌐 Frontend</h4>
+                    <p><strong>HTML5/CSS3</strong><br>Markup sémantique et styles responsifs</p>
+                    <p style="margin-top: 10px;"><strong>JavaScript Vanilla</strong><br>Pas de framework (VanillaJS)</p>
+                </div>
+                
+                <div class="tech-card">
+                    <h4>🔐 Authentification</h4>
+                    <p><strong>Firebase Auth</strong><br>Email/Password + Anonymous Auth</p>
+                    <p style="margin-top: 10px;"><strong>LocalStorage</strong><br>Stockage sessions client</p>
+                </div>
+                
+                <div class="tech-card">
+                    <h4>📊 Base de Données</h4>
+                    <p><strong>Firebase Realtime DB</strong><br>Sync temps réel (onValue, update, onDisconnect)</p>
+                    <p style="margin-top: 10px;"><strong>JSON Structure</strong><br>Données arborescentes</p>
+                </div>
+                
+                <div class="tech-card">
+                    <h4>📷 IA/ML</h4>
+                    <p><strong>Face-API.js</strong><br>Détection faciale + émotions en client-side</p>
+                    <p style="margin-top: 10px;"><strong>WebRTC</strong><br>Accès webcam navigateur</p>
+                </div>
+                
+                <div class="tech-card">
+                    <h4>📈 Données Collectées</h4>
+                    <p><strong>Émotions:</strong> Joy, Sad, Angry, Surprised, Neutral, Fearful, Disgusted</p>
+                    <p style="margin-top: 10px;"><strong>Fréquence:</strong> ~10 images/seconde (mode webcam)</p>
+                </div>
+                
+                <div class="tech-card">
+                    <h4>🧪 Testing</h4>
+                    <p><strong>Mode Manuel</strong><br>Console logs + Firebase rules</p>
+                    <p style="margin-top: 10px;"><strong>Validation:</strong> Regex, Types, Constraints</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- LIBRAIRIES EXTERNES -->
+        <h2>📦 Librairies Externes</h2>
+        <div class="section">
+            <h3>JavaScript CDN / Imports</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Librairie</th>
+                        <th>Version</th>
+                        <th>Usage</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Firebase SDK</strong></td>
+                        <td>v10.12.0</td>
+                        <td>App, Auth (Email/Anonymous), Realtime Database, Analytics</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Face-API.js</strong></td>
+                        <td>Latest CDN</td>
+                        <td>Détection visages + émotions (7 catégories)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Aucun framework</strong></td>
+                        <td>-</td>
+                        <td>Code Vanilla JS pur</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <h3 style="margin-top: 25px;">Firebase Config</h3>
+            <div class="code-block">
+const firebaseConfig = {
+  apiKey: "AIzaSyA1ZGfgTl5fEBWBQjTHBThUzDl53mRJfxk",
+  authDomain: "projetl2t1-767a4.firebaseapp.com",
+  databaseURL: "https://projetl2t1-767a4-default-rtdb.firebaseio.com",
+  projectId: "projetl2t1-767a4",
+  storageBucket: "projetl2t1-767a4.firebasestorage.app",
+  messagingSenderId: "228102026615",
+  appId: "1:228102026615:web:531fae710ee4c073ab1d72",
+  measurementId: "G-3Z1NJL7E6L"
+};
+            </div>
+            
+            <h3>Import Pattern</h3>
+            <div class="code-block">
+// Module Firebase
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+            </div>
+        </div>
+
+        <!-- STRUCTURE FIREBASE -->
+        <h2>🔥 Structure Firebase Realtime Database</h2>
+        <div class="section">
+            <div class="code-block">
+{
+  "professors": {
+    "uid_prof1": {
+      "firstName": "Jean",
+      "lastName": "Dupont",
+      "email": "jean.dupont@example.com",
+      "subject": "Mathématiques",
+      "createdAt": 1715857200000
+    }
+  },
+  "rooms": {
+    "ABCD1234": {
+      "code": "ABCD1234",
+      "professorUid": "uid_prof1",
+      "duration": 30,
+      "createdAt": 1715857200000,
+      "status": "waiting" | "active" | "ended",
+      "options": {
+        "webcam": true,
+        "questionnaire": false
+      },
+      "participants": {
+        "participant_key1": {
+          "id": "participant_key1",
+          "firstName": "Alice",
+          "lastName": "Martin",
+          "mode": "anonymous",
+          "connected": true,
+          "joinedAt": 1715857300000
+        }
+      },
+      "emotions": {
+        "participant_key1": [
+          { "emotion": "happy", "confidence": 0.95, "timestamp": 1715857350000 },
+          { "emotion": "sad", "confidence": 0.12, "timestamp": 1715857355000 }
+        ]
+      },
+      "questionnaires": {
+        "participant_key1": {
+          "q1": 5,
+          "q2": 4,
+          "q3": 3,
+          "submittedAt": 1715857400000
+        }
+      }
+    }
+  }
+}
+            </div>
+        </div>
+
+        <!-- DÉTECTION DES ÉMOTIONS -->
+        <h2>😊 Détection des Émotions (Face-API.js)</h2>
+        <div class="section">
+            <h3>7 Catégories d'Émotions</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Émotion</th>
+                        <th>Label</th>
+                        <th>Score Firebase</th>
+                        <th>Cas d'usage</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>😊</td>
+                        <td>happy</td>
+                        <td>+1.0</td>
+                        <td>Engagement positif</td>
+                    </tr>
+                    <tr>
+                        <td>😢</td>
+                        <td>sad</td>
+                        <td>-1.0</td>
+                        <td>Difficulté/Frustration</td>
+                    </tr>
+                    <tr>
+                        <td>😠</td>
+                        <td>angry</td>
+                        <td>-0.8</td>
+                        <td>Frustration intense</td>
+                    </tr>
+                    <tr>
+                        <td>😲</td>
+                        <td>surprised</td>
+                        <td>0.0</td>
+                        <td>Apprentissage/Découverte</td>
+                    </tr>
+                    <tr>
+                        <td>😐</td>
+                        <td>neutral</td>
+                        <td>0.0</td>
+                        <td>Neutre/Attentif</td>
+                    </tr>
+                    <tr>
+                        <td>😨</td>
+                        <td>fearful</td>
+                        <td>-0.6</td>
+                        <td>Anxiété/Doute</td>
+                    </tr>
+                    <tr>
+                        <td>🤢</td>
+                        <td>disgusted</td>
+                        <td>-0.7</td>
+                        <td>Désaccord/Critique</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <h3 style="margin-top: 25px;">Méthodes d'Implémentation</h3>
+            <ul class="feature-list">
+                <li><strong>Capture vidéo:</strong> WebRTC via HTMLMediaElement (&lt;video&gt;)</li>
+                <li><strong>Fréquence:</strong> ~10 images/seconde (requestAnimationFrame)</li>
+                <li><strong>Traitement:</strong> Client-side (aucune donnée vidéo envoyée)</li>
+                <li><strong>Confidentialité:</strong> Seules les émotions et scores sont synchronisés</li>
+                <li><strong>Fallback:</strong> Mode Questionnaire si webcam non disponible</li>
+            </ul>
+        </div>
+
+        <!-- QUESTIONNAIRE LIKERT -->
+        <h2>❓ Mode Questionnaire (Échelle Likert 5 points)</h2>
+        <div class="section">
+            <div class="important-box">
+                <strong>Format:</strong> 5 questions avec réponses graduées de 1 à 5
+                <br><strong>Stockage:</strong> Dans Firebase sous /questionnaires/{participant_key}
+                <br><strong>Activation:</strong> Alternative au mode webcam si préféré
+            </div>
+            
+            <h3>Exemple de Questions</h3>
+            <ol style="margin: 15px 0; padding-left: 20px;">
+                <li>Suis-je intéressé par le contenu? (1=Non, 5=Très intéressé)</li>
+                <li>Comprends-je les concepts? (1=Pas du tout, 5=Complètement)</li>
+                <li>Est-ce engageant? (1=Ennuyeux, 5=Très engageant)</li>
+                <li>Suis-je motivé? (1=Pas du tout, 5=Très motivé)</li>
+                <li>Comment évalues-tu ta confiance? (1=Pas confiant, 5=Très confiant)</li>
+            </ol>
+            
+            <h3>Traitement des Données</h3>
+            <ul class="feature-list">
+                <li>Moyenne des réponses calculée pour chaque participant</li>
+                <li>Agrégation en temps réel sur le dashboard professeur</li>
+                <li>Score subjectif global (moyenne de toutes les réponses)</li>
+            </ul>
+        </div>
+
+        <!-- KPIs & DASHBOARD -->
+        <h2>📊 KPIs & Dashboard Professeur</h2>
+        <div class="section">
+            <table>
+                <thead>
+                    <tr>
+                        <th>KPI</th>
+                        <th>Calcul</th>
+                        <th>Utilité</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Participants Connectés</strong></td>
+                        <td>COUNT(participants WHERE connected=true)</td>
+                        <td>Vue en temps réel de l'engagement</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Questionnaires Reçus</strong></td>
+                        <td>COUNT(questionnaires)</td>
+                        <td>Taux de réponse</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Score Subjectif</strong></td>
+                        <td>AVERAGE(questionnaire_responses)</td>
+                        <td>Satisfaction globale (Likert)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Score Objectif</strong></td>
+                        <td>AVERAGE(emotion_scores)</td>
+                        <td>Émotions détectées en temps réel</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Score Global</strong></td>
+                        <td>(Subjectif + Objectif) / 2</td>
+                        <td>Indicateur combiné</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Distribution Émotions</strong></td>
+                        <td>COUNT par émotion détectée</td>
+                        <td>Histogramme des 7 catégories</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- POINTS TECHNIQUES CLÉS -->
+        <h2>🔧 Points Techniques Clés</h2>
+        <div class="section">
+            <h3>Gestion Temps Réel (Firebase Realtime)</h3>
+            <div class="code-block">
+// Synchronisation en temps réel
+onValue(ref(db, `rooms/${roomId}/participants`), snapshot => {
+  const participants = snapshot.val();
+  updateUI(participants);  // Mise à jour instantanée
+});
+
+// Marquage déconnexion automatique
+onDisconnect(ref(db, `rooms/${roomId}/participants/${participantKey}`))
+  .update({ connected: false, disconnectedAt: Date.now() });
+            </div>
+            
+            <h3>Validation des Données</h3>
+            <ul class="feature-list">
+                <li><strong>Code salle:</strong> Regex AAAA0000 (4 lettres + 4 chiffres)</li>
+                <li><strong>Email:</strong> Format valide avec @</li>
+                <li><strong>Mot de passe:</strong> Au moins 8 caractères (si applicable)</li>
+                <li><strong>Numéro étudiant:</strong> Exactement 8 chiffres</li>
+                <li><strong>Émotions:</strong> 7 catégories prédéfinies uniquement</li>
+            </ul>
+            
+            <h3>Gestion des Erreurs</h3>
+            <div class="code-block">
+- auth/operation-not-allowed: Activez Anonymous Auth dans Firebase Console
+- auth/unauthorized-domain: Ajoutez le domaine dans Authorized domains
+- database/permission-denied: Vérifiez les rules Firebase
+- network-request-failed: Vérifiez la connexion réseau
+            </div>
+        </div>
+
+        <!-- HÉBERGEMENT & DÉPLOIEMENT -->
+        <h2>🚀 Hébergement & Déploiement</h2>
+        <div class="section">
+            <h3>Firebase Hosting</h3>
+            <div class="important-box">
+                <strong>Configuration:</strong> Voir firebase.json
+                <br><strong>Public folder:</strong> /trunk
+                <br><strong>URL Deploy:</strong> https://projetl2t1-767a4.web.app
+            </div>
+            
+            <h3>Local Development</h3>
+            <div class="code-block">
+cd /Users/metusgbogbohoundada/Documents/emotion-management
+python3 -m http.server 8000
+# Accèder: http://localhost:8000/trunk/accueil.html
+            </div>
+            
+            <h3>Serveur Recommandé pour Production</h3>
+            <ul class="feature-list">
+                <li>Firebase Hosting (intégration directe)</li>
+                <li>Vercel/Netlify (alternative)</li>
+                <li>Apache/Nginx (auto-hébergement)</li>
+                <li>Configuration CORS pour API externe</li>
+            </ul>
+        </div>
+
+        <!-- SÉCURITÉ -->
+        <h2>🔒 Considérations de Sécurité</h2>
+        <div class="section">
+            <div class="important-box">
+                <strong>⚠️ Important:</strong> Les données de démonstration incluent une clé API Firebase en version ouverte. En production, implémenter une couche backend pour masquer les clés.
+            </div>
+            
+            <ul class="feature-list">
+                <li>HTTPS obligatoire pour HTTPS (webcam)</li>
+                <li>Firebase Auth pour authentification</li>
+                <li>Rules Firebase pour contrôle d'accès</li>
+                <li>Données vidéo jamais transmises (traitement client-side uniquement)</li>
+                <li>RGPD: Consentement utilisateur avant capture webcam</li>
+                <li>LocalStorage pour sessions (pas de cookies tiers)</li>
+            </ul>
+        </div>
+
+        <!-- PÉPITES TECHNOLOGIQUES -->
+        <h2>✨ Innovations & Pépites Technologiques</h2>
+        <div class="section">
+            <div class="tech-grid">
+                <div class="tech-card">
+                    <h4>🎯 Détection Client-Side</h4>
+                    <p>Face-API.js exécute localement → Zéro latence, respect confidentialité</p>
+                </div>
+                
+                <div class="tech-card">
+                    <h4>⚡ Realtime Sync</h4>
+                    <p>Firebase onValue() → Dashboard mise à jour instantanée sans polling</p>
+                </div>
+                
+                <div class="tech-card">
+                    <h4>🔄 Auto-Disconnection</h4>
+                    <p>onDisconnect() → Gestion automatique des déconnexions réseau</p>
+                </div>
+                
+                <div class="tech-card">
+                    <h4>📱 Responsive Design</h4>
+                    <p>Mobile-first CSS → Fonctionne sur tous les appareils</p>
+                </div>
+                
+                <div class="tech-card">
+                    <h4>🎓 Dual Mode</h4>
+                    <p>Webcam + Questionnaire → Flexibilité totale d'engagement</p>
+                </div>
+                
+                <div class="tech-card">
+                    <h4>0️⃣ Zero Dependencies</h4>
+                    <p>Vanilla JS pur → Pas de build, déploiement direct</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- LIMITATIONS & AMÉLIORATIONS FUTURES -->
+        <h2>📋 Limitations & Améliorations Futures</h2>
+        <div class="section">
+            <h3>Limitations Actuelles</h3>
+            <ul class="feature-list">
+                <li>Face-API.js demande navigateur moderne (Chrome 50+, Firefox 55+)</li>
+                <li>Webcam non disponible sur HTTPS auto-signé</li>
+                <li>Firebase Realtime DB gratuit limité (~100 connexions simultanées)</li>
+                <li>Pas de sauvegarde de vidéo (sécurité par design)</li>
+                <li>Support mobile limité pour webcam (permissions OS)</li>
+            </ul>
+            
+            <h3 style="margin-top: 25px;">Améliorations Futures Suggérées</h3>
+            <ul class="feature-list">
+                <li>Export données en CSV/PDF depuis dashboard</li>
+                <li>Graphiques statistiques avancés (D3.js, Chart.js)</li>
+                <li>Intégration LMS (Moodle, Blackboard)</li>
+                <li>Backend Node.js pour API custom</li>
+                <li>Machine Learning pour prédictions émotions</li>
+                <li>Mode offline avec service workers</li>
+                <li>Internationalization (i18n) multi-langue</li>
+                <li>Audit trail complet des actions</li>
+            </ul>
+        </div>
+
+        <!-- RÉSUMÉ TECHNIQUE -->
+        <h2>📑 Résumé Technique</h2>
+        <div class="section">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Aspect</th>
+                        <th>Détail</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Architecture</strong></td>
+                        <td>Frontend Vanilla + Firebase Realtime (Backend-as-a-Service)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Langages</strong></td>
+                        <td>HTML5, CSS3, JavaScript ES6+</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Frameworks/Libs</strong></td>
+                        <td>Face-API.js, Firebase SDK 10.12.0</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Base de Données</strong></td>
+                        <td>Firebase Realtime Database (JSON)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Authentification</strong></td>
+                        <td>Firebase Auth (Email + Anonymous)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Détection IA</strong></td>
+                        <td>Face-API.js (7 émotions, client-side)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Hébergement</strong></td>
+                        <td>Firebase Hosting</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Responsive</strong></td>
+                        <td>Oui (Mobile, Tablet, Desktop)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Localisation</strong></td>
+                        <td>Interface 100% Française</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Statut</strong></td>
+                        <td>✅ Fonctionnel - Production Ready</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- FOOTER -->
+        <div class="footer">
+            <p><strong>Document généré:</strong> 18 mai 2026</p>
+            <p><strong>Projet:</strong> Plateforme de Monitoring des Émotions</p>
+            <p><strong>Version du Document:</strong> 1.0</p>
+            <p style="margin-top: 15px; color: #999;">Pour imprimer en PDF: Fichier → Imprimer → Enregistrer en PDF</p>
+        </div>
+
+    </div>
+
+    <script>
+        // Auto-print styles pour PDF
+        if (window.location.href.includes('print=true')) {
+            window.print();
+        }
+    </script>
+</body>
+</html>

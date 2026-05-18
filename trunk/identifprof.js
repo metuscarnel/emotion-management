@@ -1,11 +1,16 @@
 import { db, ref, onValue, ensureAuth } from "./firebase-config.js";
 
+// Redirection auto si déjà connecté
+if (localStorage.getItem("currentTeacherUid")) {
+  window.location.href = "dashboard-prof.html";
+}
+
 const emailInput = document.getElementById("email");
-const matiereInput = document.getElementById("matiere");
+const passwordInput = document.getElementById("password");
 const loginBtn = document.getElementById("loginBtn");
 const loginError = document.getElementById("loginError");
 
-const emailRegex = /^[a-z]+\.[a-z]+@u-paris\.fr$/i;
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 
 function normalize(value) {
   return (value || "").trim().toLowerCase();
@@ -49,20 +54,20 @@ function getFirebaseErrorMessage(error) {
   return "Impossible de verifier le compte professeur pour le moment.";
 }
 
-loginBtn.addEventListener("click", async (event) => {
+document.getElementById("loginForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   loginError.textContent = "";
 
   const email = emailInput.value.trim();
-  const matiere = matiereInput.value.trim();
+  const password = passwordInput.value.trim();
 
   if (!emailRegex.test(email)) {
-    loginError.textContent = "Le mail doit etre du type prenom.nom@u-paris.fr";
+    loginError.textContent = "Le format du mail est invalide.";
     return;
   }
 
-  if (!matiere) {
-    loginError.textContent = "Veuillez renseigner la matiere.";
+  if (!password) {
+    loginError.textContent = "Veuillez renseigner le mot de passe.";
     return;
   }
 
@@ -73,19 +78,18 @@ loginBtn.addEventListener("click", async (event) => {
     const foundEntry = Object.entries(teachers).find(([, teacher]) => {
       return (
         normalize(teacher?.email) === normalize(email) &&
-        normalize(teacher?.matiere) === normalize(matiere)
+        teacher?.password === password // Case sensitive for password
       );
     });
 
     if (!foundEntry) {
-      loginError.textContent = "Aucun compte trouve avec ce mail et cette matiere.";
+      loginError.textContent = "Aucun compte trouve avec ce mail et ce mot de passe.";
       return;
     }
 
     const [teacherUid, teacherData] = foundEntry;
     localStorage.setItem("currentTeacherUid", teacherUid);
     localStorage.setItem("currentTeacherEmail", teacherData?.email || "");
-    localStorage.setItem("currentTeacherMatiere", teacherData?.matiere || "");
 
     const teacherDisplayName = [teacherData?.prenom, teacherData?.nom].filter(Boolean).join(" ").trim();
     if (teacherDisplayName) {
@@ -95,11 +99,10 @@ loginBtn.addEventListener("click", async (event) => {
     const lastRoomCode = (teacherData?.lastRoomCode || "").trim().toUpperCase();
     if (isValidRoomCode(lastRoomCode)) {
       localStorage.setItem("currentRoomCode", lastRoomCode);
-      window.location.href = `salle.html?room=${encodeURIComponent(lastRoomCode)}`;
-      return;
     }
 
-    window.location.href = "create.html?new=1";
+    // Toujours rediriger vers le tableau de bord
+    window.location.href = "dashboard-prof.html";
   } catch (error) {
     console.error(error);
     loginError.textContent = getFirebaseErrorMessage(error);

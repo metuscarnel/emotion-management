@@ -1,0 +1,6 @@
+fluctuation en temps réels des emotions ( pendant la mesure), le recap (calcul) sera restituable plus tard.
+la confirmation de la deconnexion doit être un pop-up plus ux/ui (evite l'alerte de base)
+après que avoir rejoint une salle, il y a un bouton qui persiste pour "rejoindre" encore la salle:c'est à corriger.
+Donner des directives l'utilisateur se comporte mieux devant la webcam ( ne pas bouger la tête, etc)
+pour la connexion du prof, une connexion par mot de passe et non par la matière.
+Aussi, il va peut-être falloir ajouter un remplissage de questionnaire aussi pour ceux qui utilise la web cam (mais à voir plustard)

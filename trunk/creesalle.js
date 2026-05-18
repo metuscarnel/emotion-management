@@ -4,7 +4,7 @@ const emailInput = document.getElementById("email");
 const submitBtn = document.getElementById("submitBtn");
 const errorMessage = document.getElementById("errorMessage");
 
-const emailRegex = /^[a-z]+\.[a-z]+@u-paris\.fr$/;
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 
 function normalize(value) {
   return (value || "").trim().toLowerCase();
@@ -42,7 +42,8 @@ emailInput.addEventListener("input", () => {
 });
 
 // Validation globale avant navigation
-submitBtn.addEventListener("click", async (event) => {
+document.getElementById("registerForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
   const inputs = document.querySelectorAll("input");
   let valid = true;
 
@@ -75,12 +76,11 @@ submitBtn.addEventListener("click", async (event) => {
       const existingTeachers = existingTeachersSnap.exists() ? existingTeachersSnap.val() : {};
 
       const alreadyExists = Object.values(existingTeachers).some((teacher) => (
-        normalize(teacher?.email) === normalize(emailInput.value) &&
-        normalize(teacher?.matiere) === normalize(document.getElementById("matiere")?.value)
+        normalize(teacher?.email) === normalize(emailInput.value)
       ));
 
       if (alreadyExists) {
-        errorMessage.textContent = "⚠️ Un compte professeur existe déjà avec ce mail et cette matière.";
+        errorMessage.textContent = "⚠️ Un compte professeur existe déjà avec ce mail.";
         errorMessage.style.display = "block";
         return;
       }
@@ -91,7 +91,7 @@ submitBtn.addEventListener("click", async (event) => {
         nom: document.getElementById("nom")?.value.trim() || "",
         prenom: document.getElementById("prenom")?.value.trim() || "",
         email: emailInput.value.trim(),
-        matiere: document.getElementById("matiere")?.value.trim() || "",
+        password: document.getElementById("password")?.value.trim() || "",
         teacherId: teacherRef.key || "",
         uid: auth.currentUser?.uid || user.uid,
         createdAt: Date.now()

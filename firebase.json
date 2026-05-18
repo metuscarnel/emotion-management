@@ -1,0 +1,16 @@
+{
+  "hosting": {
+    "public": "trunk",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "/",
+        "destination": "/accueil.html"
+      }
+    ]
+  }
+}

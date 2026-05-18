@@ -6,9 +6,8 @@ const nbParticipants = document.getElementById("nbParticipants");
 const infoDate = document.getElementById("infoDate");
 const infoDuree = document.getElementById("infoDuree");
 const infoProf = document.getElementById("infoProf");
-const infoWebcam = document.getElementById("infoWebcam");
 const optionsActives = document.getElementById("optionsActives");
-const btnLancer = document.getElementById("btnLancer");
+const btnToggleActivity = document.getElementById("btnToggleActivity");
 const hintLancer = document.getElementById("hintLancer");
 const dotLive = document.querySelector(".dot-live");
 const liveStatusText = document.getElementById("liveStatusText");
@@ -19,12 +18,15 @@ const kpiObjectif = document.getElementById("kpiObjectif");
 const kpiGlobal = document.getElementById("kpiGlobal");
 const progressBar = document.getElementById("progressBar");
 const progressLabel = document.getElementById("progressLabel");
-const comparisonBox = document.getElementById("comparisonBox");
 const emotionRows = document.getElementById("emotionRows");
+const liveParticipantCount = document.getElementById("liveParticipantCount");
+const liveUpdateTime = document.getElementById("liveUpdateTime");
 
 let firebaseApi = null;
 let roomId = "ABCD1234";
 let participantsCache = [];
+let activeParticipantsCache = []; // Source de vérité unique pour les KPIs
+let currentConnectedCount = 0; // Source de vérité unique pour les participants connectés
 let emotionsCache = {};
 let questionnairesCache = {};
 let roomMetaCache = {};
@@ -46,10 +48,6 @@ function logFirebase(message, type = "info") {
   console.info(prefix, message);
 }
 
-function logAudit(message) {
-  console.info(`[AUDIT] ${message}`);
-}
-
 function normalizeRoomCode(value) {
   return (value || "").trim().toUpperCase();
 }
@@ -57,7 +55,14 @@ function normalizeRoomCode(value) {
 function resolveRoomId() {
   const params = new URLSearchParams(window.location.search);
   const fromUrl = normalizeRoomCode(params.get("room") || "");
-  if (fromUrl) return fromUrl;
+  if (fromUrl) {
+    // Si on a un code en URL, on s'assure qu'il écrase le stockage pour éviter les fuites
+    if (localStorage.getItem("currentRoomCode") !== fromUrl) {
+      console.log("[ROOM] Changement de salle détecté via URL:", fromUrl);
+      localStorage.setItem("currentRoomCode", fromUrl);
+    }
+    return fromUrl;
+  }
 
   const fromStorage = normalizeRoomCode(localStorage.getItem("currentRoomCode") || "");
   if (fromStorage) return fromStorage;
@@ -65,7 +70,8 @@ function resolveRoomId() {
   const fromHeader = normalizeRoomCode(codeAffiche?.textContent || "");
   if (fromHeader && fromHeader !== "——") return fromHeader;
 
-  return "ABCD1234";
+  // Pas de fallback silencieux vers ABCD1234 pour éviter la confusion
+  return null;
 }
 
 function formatDate(timestamp) {
@@ -74,14 +80,16 @@ function formatDate(timestamp) {
 }
 
 function initialsOf(p) {
+  if (p.mode === "anonymous") return "A";
   const first = (p.firstName || "").trim().charAt(0).toUpperCase();
   const last = (p.lastName || "").trim().charAt(0).toUpperCase();
   return `${first}${last}`.trim() || "?";
 }
 
 function participantLabel(p) {
+  if (p.mode === "anonymous") return "Anonyme";
   const full = [p.firstName, p.lastName].filter(Boolean).join(" ").trim();
-  return full || "Participant anonyme";
+  return full || "Anonyme";
 }
 
 function toNumber(value) {
@@ -93,10 +101,10 @@ function emotionToScore(emotionLabel) {
   const key = (emotionLabel || "").toLowerCase().trim();
 
   if (["joie", "happy", "bonheur", "enthousiasme"].includes(key)) return 5;
-  if (["surprise", "attention", "interest", "interet"].includes(key)) return 4;
+  if (["surprise", "surprised", "attention", "interest", "interet"].includes(key)) return 4;
   if (["neutre", "neutral"].includes(key)) return 3;
-  if (["tristesse", "sad", "peur", "fear", "stress", "anxieux", "anxiete"].includes(key)) return 2;
-  if (["colere", "anger", "degout", "disgust"].includes(key)) return 1;
+  if (["tristesse", "sad", "peur", "fear", "fearful", "stress", "anxieux", "anxiete"].includes(key)) return 2;
+  if (["colere", "anger", "angry", "degout", "disgust", "disgusted"].includes(key)) return 1;
 
   return 3;
 }
@@ -135,8 +143,10 @@ function computeSubjectiveAverage(participants) {
 }
 
 function computeQuestionnaireCompletion(participants, questionnaires) {
-  const participantCount = participants.length;
-  const completedByFlag = participants.filter((participant) => participant?.questionnaireCompleted).length;
+  const questionnaireParticipants = participants.filter(p => p.participationMode !== "webcam");
+  const participantCount = questionnaireParticipants.length;
+
+  const completedByFlag = questionnaireParticipants.filter((participant) => participant?.questionnaireCompleted).length;
   const completedByResponses = Object.keys(questionnaires || {}).length;
   const completed = Math.max(completedByFlag, completedByResponses);
 
@@ -201,149 +211,194 @@ function renderEmotionRows(emotionSummary) {
   });
 }
 
-function renderComparison(subjective, objective, globalScore) {
-  if (subjective === null || objective === null) {
-    comparisonBox.textContent = "Comparaison en attente: il faut des donnees subjectives et objectives pour calculer l'ecart.";
-    return;
-  }
-
-  const diff = Number((subjective - objective).toFixed(2));
-  const absDiff = Math.abs(diff);
-
-  if (absDiff <= 0.6) {
-    comparisonBox.textContent = `Comparaison: alignement correct entre ressenti et analyse objective (ecart ${absDiff}/5). Score global ${globalScore}/5.`;
-    return;
-  }
-
-  if (diff > 0) {
-    comparisonBox.textContent = `Comparaison: le ressenti declare est plus eleve que l'analyse objective (ecart ${absDiff}/5). Une verification pedagogique est recommandee.`;
-    return;
-  }
-
-  comparisonBox.textContent = `Comparaison: l'analyse objective est plus elevee que le ressenti declare (ecart ${absDiff}/5). Cela peut indiquer des signaux non verbaux non percus.`;
-}
-
 function renderActivityStatus() {
   const status = roomMetaCache?.activityStatus || "waiting";
-  const connectedCount = participantsCache.filter((participant) => participant.connected === true).length;
+
+  logFirebase(`DEBUG renderActivityStatus: status=${status}, currentConnectedCount=${currentConnectedCount}`, "info");
 
   if (status === "running") {
-    liveStatusText.textContent = "Activite en cours";
-    btnLancer.textContent = "Terminer l'activite";
-    btnLancer.disabled = false;
-    hintLancer.textContent = "L'activite est en cours. Les mesures sont suivies en temps reel.";
+    liveStatusText.textContent = "Activité en cours";
+    btnToggleActivity.textContent = "⏸️ Mettre en pause";
+    btnToggleActivity.style.background = "#6d0b24";
+    btnToggleActivity.style.opacity = "1";
+    btnToggleActivity.disabled = false;
+    hintLancer.textContent = "L'activité est en cours. Les mesures sont suivies en temps réel.";
     dotLive.classList.add("active");
+    logFirebase(`DEBUG btnToggleActivity: disabled=false (activité en cours)`, "info");
+    return;
+  }
+
+  // ✅ PAUSE: Statut pause
+  if (status === "paused") {
+    liveStatusText.textContent = "Activité en pause";
+    btnToggleActivity.textContent = "▶️ Reprendre";
+    btnToggleActivity.style.background = "#f59e0b";
+    btnToggleActivity.style.opacity = "1";
+    btnToggleActivity.disabled = false;
+    hintLancer.textContent = "L'activité est en pause. Les participants sont avertis.";
+    dotLive.classList.remove("active");
+    logFirebase(`DEBUG btnToggleActivity: disabled=false (activité en pause)`, "info");
     return;
   }
 
   if (status === "ended") {
-    liveStatusText.textContent = "Activite terminee";
-    btnLancer.textContent = "Relancer l'activite";
-    btnLancer.disabled = connectedCount === 0;
-    hintLancer.textContent = connectedCount === 0
-      ? "Activite terminee. Aucun participant connecte pour relancer."
-      : "Activite terminee. Vous pouvez relancer une nouvelle session.";
-    dotLive.classList.toggle("active", connectedCount > 0);
+    liveStatusText.textContent = "Activité terminée";
+    btnToggleActivity.textContent = "Session clôturée";
+    btnToggleActivity.style.background = "#94a3b8";
+    btnToggleActivity.style.opacity = "1";
+    btnToggleActivity.disabled = true;
+    hintLancer.textContent = "Cette session est terminée et les résultats sont définitif.";
+    dotLive.classList.remove("active");
+    logFirebase(`DEBUG btnToggleActivity: disabled=true (activité terminée)`, "info");
     return;
   }
 
+  // Status: waiting - bouton toujours actif
   liveStatusText.textContent = "En attente";
-  btnLancer.textContent = "Lancer l'activite";
-  btnLancer.disabled = connectedCount === 0;
-  hintLancer.textContent = connectedCount === 0
-    ? "En attente d'au moins 1 participant pour lancer."
-    : `Pret a lancer (${connectedCount} participant(s) connecte(s)).`;
-  dotLive.classList.toggle("active", connectedCount > 0);
+  btnToggleActivity.textContent = "▶️ Lancer l'activité";
+  btnToggleActivity.style.background = "#6d0b24";
+  btnToggleActivity.style.opacity = "1";
+  btnToggleActivity.disabled = false;
+  
+  logFirebase(`DEBUG btnToggleActivity: disabled=false (${currentConnectedCount} connecté(s))`, "info");
+  hintLancer.textContent = currentConnectedCount === 0
+    ? "Prêt à lancer. En attente de participants."
+    : `Prêt à lancer (${currentConnectedCount} participant(s) connecté(s)).`;
+  dotLive.classList.remove("active");
 }
 
 function renderParticipants(participants) {
   participantsCache = participants;
-  const connected = participants.filter((participant) => participant.connected === true);
 
-  nbParticipants.textContent = String(connected.length);
-
-  if (!participants.length) {
-    if (emptyState) emptyState.style.display = "block";
-    listeParticipants.innerHTML = "";
-    if (emptyState) listeParticipants.appendChild(emptyState);
-  } else {
-    if (emptyState) emptyState.style.display = "none";
-    listeParticipants.innerHTML = "";
-
-    participants.forEach((participant) => {
-      const row = document.createElement("div");
-      row.className = "participant-row";
-
-      const mode = participant.participationMode || "questionnaire";
-      const modeBadgeClass = mode === "webcam" ? "badge-webcam" : "badge-question";
-      const modeLabel = mode === "webcam" ? "Webcam" : "Questionnaire";
-
-      const isConnected = participant.connected === true;
-      const statusBadgeClass = isConnected ? "badge-connecte" : "badge-deconnecte";
-      const statusText = isConnected ? "Connecté" : "Déconnecté";
-      const offlineStyle = isConnected ? "" : "background-color: #ef4444; color: white;";
-
-      // Préparation de l'affichage de l'émotion ou du score
-      const emotionLabels = {
-        happy: "😊 Heureux",
-        sad: "😢 Triste",
-        neutral: "😐 Neutre",
-        angry: "😠 Colère",
-        surprised: "😲 Surpris",
-        fearful: "😨 Peur",
-        disgusted: "🤢 Dégoûté"
-      };
-
-      let emotionBadge = "";
-      if (mode === "webcam") {
-        const emotionLabel = emotionLabels[participant.dominantEmotion] || "En attente...";
-        emotionBadge = `<span class="badge" style="background-color: #f8fafc; color: #475569; border: 1px solid #e2e8f0; ${!isConnected ? 'opacity: 0.6;' : ''}">${emotionLabel}</span>`;
-      } else if (participant.subjectiveScore) {
-        emotionBadge = `<span class="badge" style="background-color: #f8fafc; color: #475569; border: 1px solid #e2e8f0; ${!isConnected ? 'opacity: 0.6;' : ''}">Score : ${participant.subjectiveScore}/5</span>`;
-      }
-
-      row.innerHTML = `
-        <div class="participant-info" style="${!isConnected ? 'opacity: 0.6;' : ''}">
-          <div class="avatar">${initialsOf(participant)}</div>
-          <div>
-            <div class="participant-nom">${participantLabel(participant)}</div>
-            <div class="participant-mat">${participant.studentEmail || "Sans email"}</div>
-          </div>
-        </div>
-        <div class="participant-badges">
-          <span class="badge ${modeBadgeClass}" style="${!isConnected ? 'opacity: 0.6;' : ''}">${modeLabel}</span>
-          ${emotionBadge}
-          <span class="badge ${statusBadgeClass}" style="${offlineStyle}">${statusText}</span>
-        </div>
-      `;
-
-      listeParticipants.appendChild(row);
-    });
+  logFirebase(`DEBUG renderParticipants: ${participants.length} participant(s) reçu(s)`, "info");
+  if (participants.length > 0) {
+    logFirebase(`DEBUG participant[0]: ${JSON.stringify(participants[0])}`, "info");
   }
 
-  const webcamCount = participants.filter((participant) => participant.participationMode === "webcam").length;
-  const questionnaireCount = participants.filter((participant) => (participant.participationMode || "questionnaire") === "questionnaire").length;
-  infoWebcam.textContent = `${webcamCount} webcam / ${questionnaireCount} questionnaire`;
+  // Source de vérité unique : participants "réels" (connectés ou ayant produit une donnée)
+  activeParticipantsCache = participants.filter(p =>
+    p.connected === true ||
+    p.connected === "true" ||
+    p.connected === 1 ||
+    (p.connected !== false && p.connected !== "false" && p.connected !== 0) || // Si pas explicitement false
+    p.objectiveEmotionComplete ||
+    p.questionnaireCompleted ||
+    (p.subjectiveScore !== undefined && p.subjectiveScore !== null)
+  );
 
+  // Calculer et stocker le compte des participants connectés (source de vérité unique)
+  // Un participant est "connecté" s'il existe dans la liste (peu importe son champ 'connected')
+  currentConnectedCount = activeParticipantsCache.length;
+
+  logFirebase(`DEBUG activeParticipantsCache: ${activeParticipantsCache.length} | currentConnectedCount: ${currentConnectedCount}`, "info");
+
+  // nbParticipants dans le header de la liste = nombre de participants CONNECTÉS
+  if (nbParticipants) nbParticipants.textContent = String(currentConnectedCount);
+
+  if (!listeParticipants) return;
+
+  listeParticipants.innerHTML = "";
+
+  if (currentConnectedCount === 0) {
+    listeParticipants.innerHTML = `
+      <div class="empty-state" id="emptyState">
+        <div class="empty-icon">👥</div>
+        <p>En attente des participants…</p>
+        <small>Partagez le code de la salle pour qu'ils puissent rejoindre.</small>
+      </div>`;
+  }
+
+  // Tri : Connectés d'abord, puis par nom
+  activeParticipantsCache.sort((a, b) => {
+    if (a.connected === b.connected) {
+      const nameA = participantLabel(a).toLowerCase();
+      const nameB = participantLabel(b).toLowerCase();
+      return nameA.localeCompare(nameB);
+    }
+    return a.connected ? -1 : 1;
+  });
+
+  activeParticipantsCache.forEach((participant) => {
+    const row = document.createElement("div");
+    row.className = "participant-row";
+
+    const hasWebcam = participant.objectiveEmotionComplete;
+    const hasQuest = participant.questionnaireCompleted || (participant.subjectiveScore !== undefined && participant.subjectiveScore !== null);
+
+    const isConnected = participant.connected === true;
+    const statusBadgeClass = isConnected ? "badge-connecte" : "badge-deconnecte";
+    const statusText = isConnected ? "Connecté" : "Déconnecté";
+    const offlineStyle = isConnected ? "" : "background-color: #ef4444; color: white;";
+
+    const isAnonymous = participant.mode === "anonymous";
+
+    const emotionLabels = { happy: "😊 Heureux", sad: "😢 Triste", neutral: "😐 Neutre", angry: "😠 Colère", surprised: "😲 Surpris", fearful: "😨 Peur", disgusted: "🤢 Dégoûté" };
+
+    // Texte pour Webcam
+    let webcamText = "Webcam";
+    if (hasWebcam && participant.dominantEmotion) {
+      webcamText += ` (${emotionLabels[participant.dominantEmotion] || "Détectée"})`;
+    } else {
+      webcamText += " (aucune mesure)";
+    }
+
+    // Texte pour Questionnaire
+    let questText = "Questionnaire";
+    if (hasQuest && participant.subjectiveScore) {
+      let scoreEmotion = "😐 Neutre";
+      if (participant.subjectiveScore >= 4.5) scoreEmotion = "😊 Heureux";
+      else if (participant.subjectiveScore >= 3.5) scoreEmotion = "😲 Surpris";
+      else if (participant.subjectiveScore >= 2.5) scoreEmotion = "😐 Neutre";
+      else if (participant.subjectiveScore >= 1.5) scoreEmotion = "😢 Triste";
+      else scoreEmotion = "😠 Colère";
+      questText += ` (${scoreEmotion})`;
+    } else {
+      questText += " (aucune mesure)";
+    }
+
+    row.innerHTML = `
+      <div class="participant-info" style="${!isConnected ? 'opacity: 0.6;' : ''}">
+        <div class="avatar">${initialsOf(participant)}</div>
+        <div>
+          <div class="participant-nom">${participantLabel(participant)}</div>
+          <div class="participant-mat">${isAnonymous ? "Anonyme" : (participant.studentEmail || "Sans email")}</div>
+        </div>
+      </div>
+      <div class="participant-badges">
+        <span class="status-badge ${hasWebcam ? 'complete' : 'pending'}">${webcamText}</span>
+        <span class="status-badge ${hasQuest ? 'complete' : 'pending'}">${questText}</span>
+        <span class="badge ${statusBadgeClass}" style="${offlineStyle}">${statusText}</span>
+      </div>
+    `;
+    listeParticipants.appendChild(row);
+  });
+
+  // Appeler renderActivityStatus() pour mettre à jour l'état en fonction du statut de l'activité
+  // Elle utilisera currentConnectedCount pour décider si le bouton doit être actif
   renderActivityStatus();
   renderDashboard();
-
-  // ✅ Mettre à jour les graphiques émotions
-  updateEmotionCharts(participants, emotionsCache);
-  displayParticipantsEmotions(participants);
-
-  // Mettre à jour stats live
-  const liveCount = document.getElementById("liveParticipantCount");
-  const liveTime = document.getElementById("liveUpdateTime");
-  if (liveCount) liveCount.textContent = participants.filter(p => p.connected === true).length;
-  if (liveTime) liveTime.textContent = new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  updateLiveIndicators();
 }
 
-function renderOptionsAndGraph() {
-  const webcamCount = participantsCache.filter((participant) => participant.participationMode === "webcam").length;
-  const questionnaireCount = participantsCache.filter((participant) => (participant.participationMode || "questionnaire") === "questionnaire").length;
+function updateLiveIndicators() {
+  if (liveParticipantCount) {
+    liveParticipantCount.textContent = String(currentConnectedCount);
+  }
+  if (liveUpdateTime) {
+    const now = new Date();
+    liveUpdateTime.textContent = now.toLocaleTimeString("fr-FR", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit"
+    });
+  }
+}
 
-  const emotionEntries = Object.entries(emotionsCache);
+function renderOptionsAndGraph(distLabels) {
+  const webcamCount = participantsCache.filter((participant) => participant.participationMode === "webcam").length;
+  const questionnaireCount = participantsCache.filter((participant) => (participant.participationMode || "questionnaire") === "questionnaire" || participant.participationMode === "likert").length;
+
+  const emotionEntries = Object.entries(distLabels || {});
   const totalEmotion = emotionEntries.reduce((sum, [, value]) => sum + Number(value || 0), 0);
 
   optionsActives.innerHTML = "";
@@ -383,20 +438,54 @@ function renderDashboard() {
   const globalScore = computeGlobalScore(subjective, objective);
   const completion = computeQuestionnaireCompletion(participantsCache, questionnairesCache);
 
-  kpiParticipants.textContent = String(participantsCache.length);
-  kpiQuestionnaires.textContent = String(completion.completed);
+  // Tous les KPIs utilisent activeParticipantsCache pour la cohérence
+  kpiParticipants.textContent = String(activeParticipantsCache.length);
+  kpiQuestionnaires.textContent = String(activeParticipantsCache.filter(p => p.questionnaireCompleted || (p.subjectiveScore !== undefined && p.subjectiveScore !== null)).length);
+
+  const kpiWebcams = document.getElementById("kpiWebcams");
+  if (kpiWebcams) {
+    kpiWebcams.textContent = String(activeParticipantsCache.filter(p => p.objectiveEmotionComplete).length);
+  }
+
   kpiSubjectif.textContent = subjective === null ? "—" : `${subjective}/5`;
   kpiObjectif.textContent = objective === null ? "—" : `${objective}/5`;
   kpiGlobal.textContent = globalScore === null ? "—" : `${globalScore}/5`;
 
-  progressBar.style.width = `${completion.pct}%`;
-  progressLabel.textContent = `${completion.pct}%`;
+  if (progressBar) progressBar.style.width = `${completion.pct}%`;
+  if (progressLabel) progressLabel.textContent = `${completion.pct}%`;
 
-  renderComparison(subjective, objective, globalScore);
-  renderEmotionRows(emotionsCache);
-  renderOptionsAndGraph();
+  const objectiveStats = { happy: 0, sad: 0, neutral: 0, angry: 0, surprised: 0, fearful: 0, disgusted: 0 };
+  const subjectiveStats = { happy: 0, sad: 0, neutral: 0, angry: 0, surprised: 0, fearful: 0, disgusted: 0 };
 
-  logAudit("Comparaison des resultats subjectifs/objectifs et score global: couverture CDC 6.3.1.4 en temps reel.");
+  Object.entries(emotionsCache).forEach(([emo, count]) => {
+    if (objectiveStats[emo] !== undefined) objectiveStats[emo] += count;
+  });
+
+  participantsCache.forEach(p => {
+    if (p.subjectiveScore) {
+      let emo = "neutral";
+      if (p.subjectiveScore >= 4.5) emo = "happy";
+      else if (p.subjectiveScore >= 3.5) emo = "surprised";
+      else if (p.subjectiveScore >= 2.5) emo = "neutral";
+      else if (p.subjectiveScore >= 1.5) emo = "sad";
+      else emo = "angry";
+      subjectiveStats[emo] += 1;
+    }
+  });
+
+  const emotionLabels = { happy: "😊 Heureux", sad: "😢 Triste", neutral: "😐 Neutre", angry: "😠 Colère", surprised: "😲 Surpris", fearful: "😨 Peur", disgusted: "🤢 Dégoûté" };
+  const distLabels = {};
+  Object.entries(objectiveStats).forEach(([emo, count]) => {
+    if (count > 0) distLabels[emotionLabels[emo]] = count;
+  });
+
+  renderEmotionRows(distLabels);
+  renderOptionsAndGraph(distLabels);
+  updateEmotionCharts(objectiveStats, subjectiveStats);
+
+  displayParticipantsEmotions(participantsCache);
+  updateLiveIndicators();
+
 }
 
 async function resolveProfessorName(meta) {
@@ -445,8 +534,7 @@ function subscribeRoomMeta() {
     renderActivityStatus();
     renderDashboard();
 
-    logFirebase("Meta salle mise a jour", "success");
-    logAudit("Suivi du statut de session en temps reel: conforme CDC 6.3.2 mode interactif.");
+    logFirebase(`Statistiques mises à jour pour salle ${roomId}`, "success");
   }, (error) => {
     logFirebase(`Echec flux meta: ${error?.code || error?.message || error}`, "error");
   });
@@ -460,8 +548,8 @@ function subscribeParticipants() {
     const raw = snapshot.val();
     const participants = raw ? Object.values(raw) : [];
     renderParticipants(participants);
-    logFirebase(`Presence mise a jour: ${participants.length} participant(s)`, "success");
-    logAudit("Salle d'attente temps reel: conforme a l'objectif de suivi interactif (CDC 6.2).");
+    renderDashboard();
+    logFirebase(`Participants synchronisés pour salle ${roomId}`, "success");
   }, (error) => {
     logFirebase(`Echec flux presence: ${error?.code || error?.message || error}`, "error");
   });
@@ -474,13 +562,12 @@ function subscribeEmotions() {
   firebaseApi.onValue(emotionsRef, (snapshot) => {
     const raw = snapshot.val();
     const sessions = raw ? Object.values(raw) : [];
-    
-    // 📊 Agréger les statistiques d'émotions de tous les participants
+
     emotionStats = {
       happy: 0, sad: 0, neutral: 0, angry: 0,
       surprised: 0, fearful: 0, disgusted: 0
     };
-    
+
     sessions.forEach((session) => {
       if (session.emotionStats) {
         Object.entries(session.emotionStats).forEach(([emo, count]) => {
@@ -491,16 +578,11 @@ function subscribeEmotions() {
       }
     });
 
-    // On met à jour le cache avec les valeurs agrégées pour le reste du tableau de bord
     emotionsCache = { ...emotionStats };
 
     renderDashboard();
-    
-    // ✅ Mettre à jour les graphiques
-    updateEmotionCharts(participantsCache, emotionStats);
-    
-    logFirebase("Flux emotions mis a jour en temps reel", "success");
-    logAudit("Visualisation statistique temps reel des emotions: CDC 6.3.2.1.");
+
+    logFirebase(`Émotions suivies pour salle ${roomId}`, "success");
   }, (error) => {
     logFirebase(`Echec flux emotions: ${error?.code || error?.message || error}`, "error");
   });
@@ -513,8 +595,7 @@ function subscribeQuestionnaires() {
   firebaseApi.onValue(questionnairesRef, (snapshot) => {
     questionnairesCache = snapshot.val() || {};
     renderDashboard();
-    logFirebase("Flux questionnaires mis a jour en temps reel", "success");
-    logAudit("Suivi des questionnaires et progression des reponses: conforme CDC 6.3.1.2 / 6.3.2.");
+    logFirebase(`Questionnaires suivis pour salle ${roomId}`, "success");
   }, (error) => {
     logFirebase(`Echec flux questionnaires: ${error?.code || error?.message || error}`, "error");
   });
@@ -547,53 +628,239 @@ window.lancerActivite = async function lancerActivite() {
   if (!firebaseApi) return;
 
   try {
-    const connectedCount = participantsCache.filter((participant) => participant.connected === true).length;
-    const isRunning = (roomMetaCache?.activityStatus || "waiting") === "running";
-
-    if (!isRunning && connectedCount === 0) {
-      hintLancer.textContent = "Impossible de lancer: aucun participant connecte.";
-      return;
-    }
-
-    if (isRunning) {
-      await mergeRoomMetaPatch({
-        activityStatus: "ended",
-        activityEndedAt: Date.now()
-      });
-      logFirebase(`Activite terminee pour salle ${roomId}`, "success");
-      logAudit("Notification de fin de session en temps reel: conforme CDC 6.3.2 mode interactif et notifications.");
-      return;
-    }
+    const currentStatus = roomMetaCache?.activityStatus || "waiting";
 
     await mergeRoomMetaPatch({
       activityStatus: "running",
-      activityStartedAt: Date.now()
+      activityStartedAt: currentStatus === "waiting" || currentStatus === "ended" ? Date.now() : roomMetaCache.activityStartedAt
     });
-    logFirebase(`Activite lancee pour salle ${roomId}`, "success");
-    logAudit("Demarrage de session suivi live: conforme CDC 6.3.2 mode interactif.");
+
+    logFirebase(`Activité lancée/reprise pour salle ${roomId}`, "success");
   } catch (error) {
-    hintLancer.textContent = "Echec lors du changement d'etat de la session.";
-    logFirebase(`Echec action activite: ${error?.code || error?.message || error}`, "error");
+    hintLancer.textContent = "Échec lors du lancement de l'activité.";
+    logFirebase(`Échec action activité: ${error?.code || error?.message || error}`, "error");
   }
 };
+
+// ✅ PAUSE: Mettre l'activité en pause
+window.pauserActivite = async function pauserActivite() {
+  if (!firebaseApi) return;
+
+  try {
+    await mergeRoomMetaPatch({
+      activityStatus: "paused",
+      activityPausedAt: Date.now()
+    });
+
+    logFirebase(`Activité mise en pause pour salle ${roomId}`, "success");
+  } catch (error) {
+    logFirebase(`Échec mise en pause: ${error?.code || error?.message || error}`, "error");
+  }
+};
+
+// ✅ REPRENDRE: Reprendre depuis une pause
+window.reprendreActivite = async function reprendreActivite() {
+  if (!firebaseApi) return;
+
+  try {
+    await mergeRoomMetaPatch({
+      activityStatus: "running"
+    });
+
+    logFirebase(`Activité reprise pour salle ${roomId}`, "success");
+  } catch (error) {
+    logFirebase(`Échec reprise activité: ${error?.code || error?.message || error}`, "error");
+  }
+};
+
+// ✅ QUESTIONNAIRE SUPPLÉMENTAIRE: Envoyer un questionnaire à tout moment
+window.sendQuestionnaireToParticipants = async function sendQuestionnaireToParticipants() {
+  if (!firebaseApi || !roomId) {
+    logFirebase("Impossible d'envoyer le questionnaire: Firebase non initialisé", "error");
+    return;
+  }
+
+  try {
+    // Créer un identifiant unique pour ce questionnaire
+    const questionnaireId = `supplementary_${Date.now()}`;
+    
+    // Envoyer le signal aux participants
+    await mergeRoomMetaPatch({
+      lastSupplementaryQuestionnaireId: questionnaireId,
+      lastSupplementaryQuestionnaireSentAt: Date.now()
+    });
+
+    logFirebase(`Questionnaire supplémentaire envoyé (ID: ${questionnaireId})`, "success");
+    
+    // Feedback visuel
+    const btn = document.getElementById("btnSendQuestionnaire");
+    if (btn) {
+      const originalText = btn.textContent;
+      btn.textContent = "✅ Questionnaire envoyé !";
+      btn.disabled = true;
+      setTimeout(() => {
+        btn.textContent = originalText;
+        btn.disabled = false;
+      }, 3000);
+    }
+  } catch (error) {
+    logFirebase(`Échec envoi questionnaire: ${error?.code || error?.message || error}`, "error");
+  }
+};
+
+
+// ✅ METTRE À JOUR LE TEXTE DU BOUTON selon l'état
+window.updateActivityButtonText = function updateActivityButtonText() {
+  const btn = document.getElementById("btnToggleActivity");
+  if (!btn) return;
+
+  const currentStatus = roomMetaCache?.activityStatus || "waiting";
+
+  if (currentStatus === "waiting") {
+    btn.textContent = "▶️ Lancer l'activité";
+    btn.disabled = false;
+  } else if (currentStatus === "running") {
+    btn.textContent = "⏸️ Mettre en pause";
+    btn.disabled = false;
+  } else if (currentStatus === "paused") {
+    btn.textContent = "▶️ Reprendre";
+    btn.disabled = false;
+  } else if (currentStatus === "ended") {
+    btn.textContent = "Activité terminée";
+    btn.disabled = true;
+  }
+};
+
+window.toggleActivity = async function toggleActivity() {
+  const currentStatus = roomMetaCache?.activityStatus || "waiting";
+  
+  if (currentStatus === "waiting") {
+    // Lancer l'activité
+    await window.lancerActivite();
+  } else if (currentStatus === "running") {
+    // Mettre en pause (au lieu de terminer immédiatement)
+    await window.pauserActivite();
+  } else if (currentStatus === "paused") {
+    // Reprendre depuis la pause
+    await window.reprendreActivite();
+  }
+  // Si status === "ended", le bouton est désactivé donc on ne devrait pas arriver ici
+};
+
+window.stopperActivite = function stopperActivite() {
+  const modal = document.getElementById("stopModal");
+  if (modal) modal.classList.remove("hidden");
+};
+
+async function confirmStopperActivite() {
+  if (!firebaseApi) return;
+  try {
+    await mergeRoomMetaPatch({
+      activityStatus: "ended",
+      activityEndedAt: Date.now()
+    });
+    logFirebase(`Activité stoppée pour salle ${roomId}`, "success");
+    const modal = document.getElementById("stopModal");
+    if (modal) modal.classList.add("hidden");
+  } catch (error) {
+    logFirebase(`Échec stop activité: ${error?.message}`, "error");
+  }
+}
 
 window.disconnect = function disconnect() {
-  if (confirm("Êtes-vous sûr de vouloir vous déconnecter ?\n\nCela fermera la salle et effacera toutes les données de session.")) {
-    // Effacer toutes les données de session
-    localStorage.removeItem("currentRoomCode");
-    localStorage.removeItem("currentTeacherUid");
-    localStorage.removeItem("currentTeacherDisplayName");
-    localStorage.removeItem("currentUser");
-    
-    logAudit("Déconnexion professeur - Fermeture de la salle et effacement des données de session.");
-    logFirebase("Professeur déconnecté avec succès", "success");
-    
-    // Rediriger vers l'accueil
-    window.location.href = "accueil.html";
-  }
+  const modal = document.getElementById("disconnectModal");
+  if (modal) modal.classList.remove("hidden");
 };
 
-/* ===== GRAPHIQUES CHART.JS ===== */
+document.addEventListener("DOMContentLoaded", () => {
+  const modal = document.getElementById("disconnectModal");
+  const cancelBtn = document.getElementById("cancelDisconnectBtn");
+  const confirmBtn = document.getElementById("confirmDisconnectBtn");
+
+  if (cancelBtn) {
+    cancelBtn.addEventListener("click", () => {
+      if (modal) modal.classList.add("hidden");
+    });
+  }
+
+  if (confirmBtn) {
+    confirmBtn.addEventListener("click", async () => {
+      if (modal) modal.classList.add("hidden");
+      const teacherUid = localStorage.getItem("currentTeacherUid");
+
+      if (firebaseApi) {
+        try {
+          if (teacherUid) {
+            await firebaseApi.set(firebaseApi.ref(firebaseApi.db, `teachers/${teacherUid}/lastRoomCode`), null);
+          }
+          if (typeof roomId !== 'undefined' && roomId) {
+            await mergeRoomMetaPatch({ activityStatus: "ended" });
+          }
+        } catch (err) {
+          console.error("Erreur lors du nettoyage Firebase:", err);
+        }
+      }
+
+      localStorage.removeItem("currentRoomCode");
+      localStorage.removeItem("currentTeacherUid");
+      localStorage.removeItem("currentTeacherDisplayName");
+      localStorage.removeItem("currentUser");
+
+      logFirebase("Déconnexion professeur - Fermeture de la salle");
+      logFirebase("Professeur déconnecté avec succès", "success");
+
+      window.location.href = "accueil.html";
+    });
+  }
+
+  // MODALE STOP
+  const stopModal = document.getElementById("stopModal");
+  const cancelStopBtn = document.getElementById("cancelStopBtn");
+  const confirmStopBtn = document.getElementById("confirmStopBtn");
+
+  if (cancelStopBtn) {
+    cancelStopBtn.addEventListener("click", () => {
+      if (stopModal) stopModal.classList.add("hidden");
+    });
+  }
+
+  if (confirmStopBtn) {
+    confirmStopBtn.addEventListener("click", () => {
+      confirmStopperActivite();
+    });
+  }
+
+  // ✅ LONG CLIC SUR BOUTON ACTIVITÉ POUR TERMINER
+  let pressTimer = null;
+  if (btnToggleActivity) {
+    btnToggleActivity.addEventListener("mousedown", () => {
+      pressTimer = setTimeout(() => {
+        // Long clic détecté (500ms)
+        const currentStatus = roomMetaCache?.activityStatus || "waiting";
+        if (currentStatus === "running" || currentStatus === "paused") {
+          // Afficher modale de terminer
+          if (stopModal) stopModal.classList.remove("hidden");
+        }
+      }, 500);
+    });
+
+    btnToggleActivity.addEventListener("mouseup", () => {
+      if (pressTimer) {
+        clearTimeout(pressTimer);
+        pressTimer = null;
+      }
+    });
+
+    btnToggleActivity.addEventListener("mouseleave", () => {
+      if (pressTimer) {
+        clearTimeout(pressTimer);
+        pressTimer = null;
+      }
+    });
+  }
+});
+
+/* Graphiques Chart.js */
 let pieChart = null;
 let lineChart = null;
 let emotionTimeSeries = {};
@@ -649,7 +916,7 @@ function initializeCharts() {
     lineChart = new Chart(lineCtx, {
       type: "bar",
       data: {
-        labels: ["😊 Heureux", "😢 Triste", "😐 Neutre", "😠 Colère", "😲 Surpris", "😨 Peur", "🤢 Dégoûté"],
+        labels: ["Heureux", "Triste", "Neutre", "Colère", "Surpris", "Peur", "Dégoûté"],
         datasets: [
           {
             label: "Répartition (%)",
@@ -665,7 +932,7 @@ function initializeCharts() {
           y: { beginAtZero: true, min: 0, max: 100 }
         },
         plugins: {
-          legend: { display: false } // Masqué car les couleurs et labels sont explicites sur l'axe X
+          legend: { display: false } // Masqué car on affiche un pourcentage unifié
         }
       }
     });
@@ -679,7 +946,7 @@ function initializeCharts() {
   }
 }
 
-function updateEmotionCharts(participants, emotions) {
+function updateEmotionCharts(objectiveStats, subjectiveStats) {
   // Vérifier que Chart.js est disponible
   if (typeof Chart === "undefined") {
     logFirebase("⚠️ Chart.js n'est pas chargé", "error");
@@ -696,29 +963,53 @@ function updateEmotionCharts(participants, emotions) {
     }
   }
 
-  // Calculer le total d'émotions
-  const total = Object.values(emotionStats || {}).reduce((a, b) => a + b, 0);
   const emotionOrder = ["happy", "sad", "neutral", "angry", "surprised", "fearful", "disgusted"];
 
-  // Si pas de données, on force à 0% au lieu d'arrêter la fonction
-  const percentages = total > 0 
-    ? emotionOrder.map(e => Math.round(((emotionStats[e] || 0) / total) * 100))
+  // Calculs (Webcam)
+  const objCounts = emotionOrder.map(e => objectiveStats[e] || 0);
+  const objTotal = objCounts.reduce((a, b) => a + b, 0);
+  const objPercentages = objTotal > 0
+    ? objCounts.map(count => (count / objTotal) * 100)
     : [0, 0, 0, 0, 0, 0, 0];
 
+  // Calculs (Questionnaires)
+  const subCounts = emotionOrder.map(e => subjectiveStats[e] || 0);
+  const subTotal = subCounts.reduce((a, b) => a + b, 0);
+  const subPercentages = subTotal > 0
+    ? subCounts.map(count => (count / subTotal) * 100)
+    : [0, 0, 0, 0, 0, 0, 0];
+
+  // Moyenne des pourcentages
+  const combinedPercentages = emotionOrder.map((_, i) => {
+    if (objTotal > 0 && subTotal > 0) {
+      return Math.round((objPercentages[i] + subPercentages[i]) / 2);
+    } else if (objTotal > 0) {
+      return Math.round(objPercentages[i]);
+    } else if (subTotal > 0) {
+      return Math.round(subPercentages[i]);
+    }
+    return 0;
+  });
+
   try {
-    // Mettre à jour le graphique PIE
-    pieChart.data.datasets[0].data = percentages;
-    pieChart.update("none"); // Mode "none" pour éviter les animations
-    logFirebase(`📊 Graphique PIE mis à jour: ${JSON.stringify(emotionStats)}`, "info");
+    // Mise à jour du PIE chart
+    pieChart.data.datasets[0].data = objCounts.map(Math.round);
+    pieChart.update();
+    logFirebase(`📊 Graphique PIE mis à jour avec données webcam`, "info");
   } catch (err) {
     logFirebase(`❌ Erreur mise à jour PIE: ${err.message}`, "error");
   }
 
   try {
-    // Mettre à jour l'histogramme classique (Pourcentage par émotion)
-    lineChart.data.datasets[0].data = percentages;
+    // Mise à jour de l'histogramme
+    lineChart.data.datasets[0].data = combinedPercentages;
 
-    lineChart.update("none");
+    // Si un ancien dataset existe encore en cache, on le supprime
+    if (lineChart.data.datasets.length > 1) {
+      lineChart.data.datasets.splice(1, 1);
+    }
+
+    lineChart.update();
     logFirebase(`📈 Graphique BAR mis à jour`, "info");
   } catch (err) {
     logFirebase(`❌ Erreur mise à jour LINE: ${err.message}`, "error");
@@ -731,19 +1022,23 @@ function displayParticipantsEmotions(participants) {
 
   container.innerHTML = "";
 
-  const emotionLabels = {
-    happy: "😊 Heureux",
-    sad: "😢 Triste",
-    neutral: "😐 Neutre",
-    angry: "😠 Colère",
-    surprised: "😲 Surpris",
-    fearful: "😨 Peur",
-    disgusted: "🤢 Dégoûté"
-  };
-
   participants.forEach((p) => {
-    const avatar = ((p.firstName || "P")[0] + (p.lastName || "")[0] || "?").toUpperCase();
-    const emotion = emotionLabels[p.dominantEmotion || "neutral"] || "Neutre";
+    const isAnonymous = p.mode === "anonymous";
+
+    const avatar = isAnonymous ? "A" : ((p.firstName || "P")[0] + (p.lastName || "")[0] || "?").toUpperCase();
+
+    let statusTag = "En attente";
+    if (p.participationMode === "webcam" && p.dominantEmotion) {
+      const emotionLabels = { happy: "😊 Heureux", sad: "😢 Triste", neutral: "😐 Neutre", angry: "😠 Colère", surprised: "😲 Surpris", fearful: "😨 Peur", disgusted: "🤢 Dégoûté" };
+      statusTag = emotionLabels[p.dominantEmotion] || "Émotion détectée";
+    } else if (p.subjectiveScore) {
+      if (p.subjectiveScore >= 4.5) statusTag = "😊 Heureux";
+      else if (p.subjectiveScore >= 3.5) statusTag = "😲 Surpris";
+      else if (p.subjectiveScore >= 2.5) statusTag = "😐 Neutre";
+      else if (p.subjectiveScore >= 1.5) statusTag = "😢 Triste";
+      else statusTag = "😠 Colère";
+    }
+
     const timeAgo = p.updatedAt ? formatTimeAgo(p.updatedAt) : "—";
 
     const html = `
@@ -755,7 +1050,7 @@ function displayParticipantsEmotions(participants) {
             <p>${timeAgo}</p>
           </div>
         </div>
-        <div class="participant-emotion-badge">${emotion}</div>
+        <div class="participant-emotion-badge">${statusTag}</div>
       </div>
     `;
 
@@ -765,8 +1060,9 @@ function displayParticipantsEmotions(participants) {
 
 function formatTimeAgo(timestamp) {
   if (!timestamp) return "—";
-  const seconds = Math.floor((Date.now() - timestamp) / 1000);
-  
+  let seconds = Math.floor((Date.now() - timestamp) / 1000);
+  if (seconds < 0) seconds = 0;
+
   if (seconds < 60) return "À l'instant";
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `il y a ${minutes}m`;
@@ -783,7 +1079,6 @@ async function start() {
   infoDate.textContent = "Chargement...";
   infoDuree.textContent = "Chargement...";
   infoProf.textContent = "Chargement...";
-  infoWebcam.textContent = "Chargement...";
   liveStatusText.textContent = "Chargement...";
 
   try {
@@ -811,6 +1106,13 @@ async function start() {
     subscribeParticipants();
     subscribeEmotions();
     subscribeQuestionnaires();
+
+    // Rafraîchir les labels "il y a X min" toutes les 30 secondes
+    setInterval(() => {
+      displayParticipantsEmotions(participantsCache);
+      updateLiveIndicators();
+    }, 30000);
+
   } catch (error) {
     logFirebase(`Echec initialisation ecran suivi: ${error?.code || error?.message || error}`, "error");
     hintLancer.textContent = "Erreur de connexion Firebase.";
@@ -818,3 +1120,22 @@ async function start() {
 }
 
 start();
+
+document.addEventListener("DOMContentLoaded", () => {
+  const refreshBtn = document.getElementById("refreshDashboardBtn");
+  if (refreshBtn) {
+    refreshBtn.addEventListener("click", () => {
+      renderDashboard();
+      renderParticipants(participantsCache);
+
+      const originalText = refreshBtn.textContent;
+      refreshBtn.textContent = "Actualisé ✓";
+      refreshBtn.style.opacity = "0.7";
+
+      setTimeout(() => {
+        refreshBtn.textContent = originalText;
+        refreshBtn.style.opacity = "1";
+      }, 1500);
+    });
+  }
+});

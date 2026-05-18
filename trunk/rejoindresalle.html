@@ -4,8 +4,48 @@
   <meta charset="UTF-8">
   <title>Rejoindre une salle</title>
   <link rel="stylesheet" href="rejoindresalle.css">
-  <!-- Face-API.js depuis jsDelivr (plus stable) -->
-  <script async src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@latest/dist/face-api.js"></script>
+  <!-- Face-API.js depuis jsDelivr (version stable 1.7.12) -->
+  <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/dist/face-api.js"></script>
+  <style>
+    /* Styles spécifiques pour les boutons séparés */
+    .btn-measurement {
+      background: var(--vin) !important;
+      color: white !important;
+    }
+    .btn-exit {
+      background: #f1f5f9 !important;
+      color: #475569 !important;
+      border: 1px solid #e2e8f0 !important;
+    }
+    .action-group {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 30px;
+    }
+    .action-group button {
+      margin-top: 0 !important; /* On gère l'espacement via le gap du parent */
+    }
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5); display: flex;
+      align-items: center; justify-content: center; z-index: 9999;
+    }
+    .modal-overlay.hidden { display: none !important; }
+    .modal-content {
+      background: white; padding: 25px; border-radius: 12px;
+      max-width: 400px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    }
+    .modal-actions {
+      display: flex; gap: 10px; justify-content: center; margin-top: 20px;
+    }
+    .btn-cancel { background: #f1f5f9; color: #475569; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; }
+    .btn-confirm { background: #6d0b24; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; }
+    .btn-cancel:hover { background: #e2e8f0; }
+    .btn-confirm:hover { background: #830c2a; }
+    .webcam-hint ul { text-align: left; margin: 10px auto; display: inline-block; padding-left: 20px; }
+    .webcam-hint li { margin-bottom: 5px; }
+  </style>
 </head>
 <body>
 
@@ -13,161 +53,98 @@
 
   <h1>Rejoindre une salle</h1>
   <p class="subtitle">Entrez le code fourni par votre enseignant</p>
+  
   <div id="activityStatusBanner" class="activity-status-banner" aria-live="polite">
     En attente du démarrage de l'activité par le professeur.
   </div>
 
-  <!-- CODE SALLE -->
-  <label>Code de la salle</label>
-  <input type="text" id="roomCode" placeholder="CODE ABCD1234" maxlength="8">
-  <small id="codeError" class="status-message"></small>
+  <div id="joinPanel">
+    <!-- CODE SALLE -->
+    <label>Code de la salle</label>
+    <input type="text" id="roomCode" placeholder="CODE ABCD1234" maxlength="8">
+    <small id="codeError" class="status-message"></small>
 
-  <!-- WEBCAM SETTINGS -->
-  <h2>Paramètres webcam</h2>
-
-  <div class="options">
-    <div class="option active" id="enableCam">
-      <span class="icon">📷</span>
-      <strong>Activer la webcam</strong>
-      <p>Autoriser la détection des émotions</p>
+    <!-- WEBCAM SETTINGS -->
+    <h2 style="margin-top: 25px; font-size: 18px;">Paramètres webcam</h2>
+    <div class="webcam-hint" style="background:#e0f2fe; color:#0f172a; padding:15px; border-radius:10px; font-size:14px; margin-bottom:20px; text-align:center; line-height: 1.5; border: 1px solid #bae6fd;">
+      💡 <strong>Directives pour une analyse optimale :</strong>
+      <ul>
+        <li>Placez-vous bien en face de la caméra.</li>
+        <li>Assurez-vous d'avoir un bon éclairage.</li>
+        <li><strong>Ne bougez pas la tête brusquement</strong> et restez cadré(e).</li>
+      </ul>
     </div>
 
-    <div class="option" id="noCam">
-      <span class="icon">❓</span>
-      <strong>Questionnaire uniquement</strong>
-      <p>Participer sans webcam</p>
+    <div class="info-participation" style="background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; margin-bottom: 25px; text-align: center;">
+      <p style="color: #6d0b24; font-weight: bold; margin-bottom: 10px;">🛡️ Mode de Participation</p>
+      <p style="font-size: 14px; color: #475569; line-height: 1.5;">
+        Pour garantir la pertinence de l'étude, vous pouvez participer via la <strong>webcam</strong> (mesure objective) et/ou répondre au <strong>questionnaire</strong> (mesure subjective).
+      </p>
     </div>
   </div>
 
-  <!-- VIDEO -->
-  <div id="videoBox" class="hidden">
-    <video id="video" autoplay muted></video>
-    <canvas id="overlay"></canvas>
+  <!-- VIDEO BOX -->
+  <div id="videoBox" class="hidden" style="margin-top: 20px;">
+    <div style="position: relative; width: 100%; border-radius: 16px; overflow: hidden; background: #000; aspect-ratio: 4/3;">
+      <video id="video" autoplay muted style="width: 100%; height: 100%; object-fit: cover;"></video>
+      <canvas id="overlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></canvas>
+    </div>
     
     <!-- DÉTECTION ÉMOTIONS -->
-    <div id="detectionPanel" class="hidden">
-      <div class="detection-header">
-        <h2>Détection des émotions en cours...</h2>
-        <div class="timer">⏱️ <span id="timerDisplay">0</span>s</div>
+    <div id="detectionPanel" class="hidden" style="margin-top: 15px;">
+      <div class="detection-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+        <h2 style="font-size: 16px; margin: 0;">Analyse en cours...</h2>
+        <div class="timer" style="font-weight: bold; color: var(--vin);">⏱️ <span id="timerDisplay">0</span>s</div>
       </div>
       
-      <!-- ÉMOTION DOMINANTE -->
-      <div class="dominant-emotion">
-        <p>Émotion dominante</p>
-        <div id="dominantEmotionDisplay" class="emotion-large">--</div>
+      <div style="text-align: center; background: #f8fafc; padding: 15px; border-radius: 12px; border: 1px solid #e2e8f0;">
+        <p style="margin: 0; font-size: 13px; color: #64748b;">Émotion détectée :</p>
+        <div id="liveEmotionDisplay" style="font-size: 28px; font-weight: bold; color: var(--vin); margin: 5px 0;">Analyse...</div>
+        <div id="positionFeedback" style="font-size: 12px; color: #94a3b8;">Positionnement...</div>
       </div>
-      
-      <!-- STATISTIQUES -->
-      <div class="emotion-stats">
-        <div class="stat-row">
-          <span>😊 Heureux</span>
-          <div class="stat-bar"><div id="stat-happy" class="stat-fill"></div></div>
-          <span id="stat-happy-pct">0%</span>
-        </div>
-        <div class="stat-row">
-          <span>😢 Triste</span>
-          <div class="stat-bar"><div id="stat-sad" class="stat-fill"></div></div>
-          <span id="stat-sad-pct">0%</span>
-        </div>
-        <div class="stat-row">
-          <span>😐 Neutre</span>
-          <div class="stat-bar"><div id="stat-neutral" class="stat-fill"></div></div>
-          <span id="stat-neutral-pct">0%</span>
-        </div>
-        <div class="stat-row">
-          <span>😠 En colère</span>
-          <div class="stat-bar"><div id="stat-angry" class="stat-fill"></div></div>
-          <span id="stat-angry-pct">0%</span>
-        </div>
-        <div class="stat-row">
-          <span>😲 Surpris</span>
-          <div class="stat-bar"><div id="stat-surprised" class="stat-fill"></div></div>
-          <span id="stat-surprised-pct">0%</span>
-        </div>
-        <div class="stat-row">
-          <span>😨 Peur</span>
-          <div class="stat-bar"><div id="stat-fearful" class="stat-fill"></div></div>
-          <span id="stat-fearful-pct">0%</span>
-        </div>
-        <div class="stat-row">
-          <span>🤢 Dégoûté</span>
-          <div class="stat-bar"><div id="stat-disgusted" class="stat-fill"></div></div>
-          <span id="stat-disgusted-pct">0%</span>
-        </div>
-      </div>
-      
-      <!-- BOUTON TERMINER -->
-      <button id="endDetectionBtn" class="btn-primary">Terminer la détection ✓</button>
     </div>
 
-    <!-- RÉSULTATS ÉMOTIONS -->
-    <div id="resultsPanel" class="hidden">
-      <div class="results-header">
-        <h2>📊 Résultats de la Détection</h2>
-        <p>Vos émotions détectées</p>
-      </div>
-
-      <!-- STAT CLÉS -->
-      <div class="results-stats">
-        <div class="stat-card">
-          <span class="stat-label">Durée</span>
-          <span class="stat-value" id="resultDuration">0s</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-label">Échantillons</span>
-          <span class="stat-value" id="resultSamples">0</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-label">Émotion Dominante</span>
-          <span class="stat-value" id="resultDominant">--</span>
-        </div>
-      </div>
-
-      <!-- GRAPHIQUE ÉMOTIONS -->
-      <div class="results-chart">
-        <h3>Répartition des Émotions</h3>
-        <div id="emotionChart" class="chart-container">
-          <!-- Chart SVG sera généré ici -->
-        </div>
-      </div>
-
-      <!-- TABLEAU DÉTAILS -->
-      <div class="results-table">
-        <h3>Détails par Émotion</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>Émotion</th>
-              <th>Nombre</th>
-              <th>Pourcentage</th>
-            </tr>
-          </thead>
-          <tbody id="emotionTableBody">
-            <!-- Rempli dynamiquement -->
-          </tbody>
-        </table>
-      </div>
-
-      <!-- BOUTONS ACTION -->
-      <div class="results-actions">
-        <button id="repeatDetectionBtn" class="btn-secondary">🔄 Refaire la mesure</button>
-        <button id="returnHomeBtn" class="btn-primary">✓ Terminer</button>
-      </div>
-    </div>
+    <!-- RÉSULTATS ÉMOTIONS (S'affiche après arrêt de la mesure) -->
+    <div id="resultsPanel" class="hidden"></div>
   </div>
 
-  <!-- BOUTONS -->
-  <div class="button-group">
+  <!-- GROUPE D'ACTIONS -->
+  <div class="action-group">
     <button id="joinBtn">Rejoindre la salle →</button>
-    <button id="leaveBtn" class="btn-leave hidden">🚪 Quitter la salle</button>
+    <button id="endDetectionBtn" class="btn-measurement hidden">Fin de la mesure webcam</button>
+    <button id="leaveBtn" class="btn-exit hidden">🚪 Quitter la salle</button>
   </div>
 
   <!-- CONFIDENTIALITÉ -->
-  <div class="privacy">
-    🔒 Les données webcam sont traitées localement.  
+  <div class="privacy" style="text-align: center; margin-top: 25px; opacity: 0.7;">
+    🔒 Les données webcam sont traitées localement.<br>
     Aucune image n’est enregistrée.
   </div>
 
+</div>
+
+<!-- MODALE QUITTER -->
+<div id="leaveModal" class="modal-overlay hidden">
+  <div class="modal-content">
+    <h3>Quitter la salle ?</h3>
+    <p>Êtes-vous sûr de vouloir quitter la session en cours ? Vos données seront sauvegardées.</p>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="cancelLeaveBtn">Rester</button>
+      <button class="btn-confirm" id="confirmLeaveBtn">Quitter</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODALE CONSENTEMENT WEBCAM -->
+<div id="webcamModal" class="modal-overlay hidden">
+  <div class="modal-content">
+    <h3>🛡️ Autorisation Webcam</h3>
+    <p>Pour la mesure objective des émotions, nous vous invitons à autoriser l’accès à la webcam. Aucune image n'est enregistrée.</p>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="cancelWebcamBtn">Refuser</button>
+      <button class="btn-confirm" id="confirmWebcamBtn">Autoriser</button>
+    </div>
+  </div>
 </div>
 
 <script src="rejoindresalle.js"></script>
