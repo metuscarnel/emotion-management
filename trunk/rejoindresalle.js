@@ -44,9 +44,9 @@ let lastSuccessfulSync = 0;
 let lastSyncedEmotion = null; // Tracker pour ne syncer que si changement
 let syncQueue = null; // Debounce timer
 
-// 🚀 CONSTANTS POUR 40+ UTILISATEURS
-const SYNC_RATE_LIMIT = 6000; // 6s entre syncs (au lieu de 3s) - réduit charge Firebase de 50%
-const DEBOUNCE_EMOTION_CHANGE = 2000; // Attendre 2s après un changement d'émotion pour syncer
+// 🚀 CONSTANTS SYNCHRONISATION TEMPS RÉEL RAPIDE
+const SYNC_RATE_LIMIT = 1500; // Sync forcée toutes les 1.5s
+const DEBOUNCE_EMOTION_CHANGE = 1000; // Attendre 1s après un changement d'émotion
 const MIN_CONFIDENCE_SYNC = 0.4; // Ne syncer que si confiance > 40%
 
 // === GESTION DE LA DÉCONNEXION ===
@@ -1384,6 +1384,7 @@ async function syncLiveEmotions(currentEmotion) {
     // Envoyer seulement l'émotion + timestamp (payload minimal)
     await firebaseApi.update(participantRef, {
       dominantEmotion: currentEmotion,
+      liveStats: emotionStats, // <-- STATS EN DIRECT
       updatedAt: Date.now()
     });
     
@@ -1409,6 +1410,7 @@ async function syncLiveEmotionsLight() {
     
     // ✅ ULTRA-LÉGER: Juste un heartbeat confirmer présence active
     await firebaseApi.update(participantRef, {
+      liveStats: emotionStats, // <-- STATS EN DIRECT
       updatedAt: Date.now()
     });
     

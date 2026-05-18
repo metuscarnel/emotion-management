@@ -376,7 +376,6 @@ function renderParticipants(participants) {
   // Appeler renderActivityStatus() pour mettre à jour l'état en fonction du statut de l'activité
   // Elle utilisera currentConnectedCount pour décider si le bouton doit être actif
   renderActivityStatus();
-  renderDashboard();
   updateLiveIndicators();
 }
 
@@ -433,9 +432,6 @@ function renderOptionsAndGraph(distLabels) {
 }
 
 function renderDashboard() {
-  const subjective = computeSubjectiveAverage(participantsCache);
-  const objective = computeObjectiveAverage(emotionsCache);
-  const globalScore = computeGlobalScore(subjective, objective);
   const completion = computeQuestionnaireCompletion(participantsCache, questionnairesCache);
 
   // Tous les KPIs utilisent activeParticipantsCache pour la cohérence
@@ -444,12 +440,8 @@ function renderDashboard() {
 
   const kpiWebcams = document.getElementById("kpiWebcams");
   if (kpiWebcams) {
-    kpiWebcams.textContent = String(activeParticipantsCache.filter(p => p.objectiveEmotionComplete).length);
+    kpiWebcams.textContent = String(activeParticipantsCache.filter(p => p.dominantEmotion !== undefined || p.objectiveEmotionComplete).length);
   }
-
-  kpiSubjectif.textContent = subjective === null ? "—" : `${subjective}/5`;
-  kpiObjectif.textContent = objective === null ? "—" : `${objective}/5`;
-  kpiGlobal.textContent = globalScore === null ? "—" : `${globalScore}/5`;
 
   if (progressBar) progressBar.style.width = `${completion.pct}%`;
   if (progressLabel) progressLabel.textContent = `${completion.pct}%`;
@@ -457,11 +449,22 @@ function renderDashboard() {
   const objectiveStats = { happy: 0, sad: 0, neutral: 0, angry: 0, surprised: 0, fearful: 0, disgusted: 0 };
   const subjectiveStats = { happy: 0, sad: 0, neutral: 0, angry: 0, surprised: 0, fearful: 0, disgusted: 0 };
 
+  // 1. Ajouter les statistiques accumulées des sessions terminées
   Object.entries(emotionsCache).forEach(([emo, count]) => {
     if (objectiveStats[emo] !== undefined) objectiveStats[emo] += count;
   });
 
   participantsCache.forEach(p => {
+    // 2. Ajouter les statistiques en direct (Live) des sessions en cours
+    if (!p.objectiveEmotionComplete && p.liveStats) {
+      Object.entries(p.liveStats).forEach(([emo, count]) => {
+        if (objectiveStats[emo] !== undefined) objectiveStats[emo] += count;
+      });
+    } else if (!p.objectiveEmotionComplete && p.dominantEmotion && objectiveStats[p.dominantEmotion] !== undefined) {
+      // Fallback au vote unique si liveStats n'est pas encore remonté
+      objectiveStats[p.dominantEmotion] += 1;
+    }
+
     if (p.subjectiveScore) {
       let emo = "neutral";
       if (p.subjectiveScore >= 4.5) emo = "happy";
@@ -472,6 +475,14 @@ function renderDashboard() {
       subjectiveStats[emo] += 1;
     }
   });
+
+  const subjective = computeSubjectiveAverage(participantsCache);
+  const objective = computeObjectiveAverage(objectiveStats);
+  const globalScore = computeGlobalScore(subjective, objective);
+
+  kpiSubjectif.textContent = subjective === null ? "—" : `${subjective}/5`;
+  kpiObjectif.textContent = objective === null ? "—" : `${objective}/5`;
+  kpiGlobal.textContent = globalScore === null ? "—" : `${globalScore}/5`;
 
   const emotionLabels = { happy: "😊 Heureux", sad: "😢 Triste", neutral: "😐 Neutre", angry: "😠 Colère", surprised: "😲 Surpris", fearful: "😨 Peur", disgusted: "🤢 Dégoûté" };
   const distLabels = {};
@@ -926,6 +937,7 @@ function initializeCharts() {
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        animation: { duration: 0 }, // Pas d'animation pour des mises à jour fluides en temps réel
         plugins: {
           legend: {
             position: "bottom",
@@ -1018,10 +1030,12 @@ function updateEmotionCharts(objectiveStats, subjectiveStats) {
   });
 
   try {
-    // Mise à jour du PIE chart avec forçage de la mise à jour
+    // Mise à jour du PIE chart de façon réactive
     if (pieChart && pieChart.data && pieChart.data.datasets[0]) {
-      pieChart.data.datasets[0].data = objCounts.map(Math.round);
-      pieChart.update('none'); // 'none' = pas d'animation pour une mise à jour instantanée
+      objCounts.forEach((count, i) => {
+        pieChart.data.datasets[0].data[i] = Math.round(count);
+      });
+      pieChart.update();
       logFirebase(`📊 Graphique PIE mis à jour avec données webcam`, "success");
     }
   } catch (err) {
@@ -1037,16 +1051,18 @@ function updateEmotionCharts(objectiveStats, subjectiveStats) {
   }
 
   try {
-    // Mise à jour de l'histogramme avec forçage de la mise à jour
+    // Mise à jour de l'histogramme de façon réactive
     if (lineChart && lineChart.data && lineChart.data.datasets[0]) {
-      lineChart.data.datasets[0].data = combinedPercentages;
+      combinedPercentages.forEach((pct, i) => {
+        lineChart.data.datasets[0].data[i] = pct;
+      });
 
       // Si un ancien dataset existe encore en cache, on le supprime
       if (lineChart.data.datasets.length > 1) {
         lineChart.data.datasets.splice(1);
       }
 
-      lineChart.update('none'); // 'none' = pas d'animation pour une mise à jour instantanée
+      lineChart.update();
       logFirebase(`📈 Graphique BAR mis à jour`, "success");
     }
   } catch (err) {
