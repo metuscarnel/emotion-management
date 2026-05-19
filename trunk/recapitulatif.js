@@ -48,6 +48,7 @@ async function loadRecap() {
     // Filtrer les participants "réels" (ceux qui ont produit une donnée)
     const participants = allParticipants.filter(p => 
       p.objectiveEmotionComplete || 
+      p.dominantEmotion ||
       p.questionnaireCompleted || 
       (p.subjectiveScore !== undefined && p.subjectiveScore !== null)
     );
@@ -85,7 +86,7 @@ async function loadRecap() {
             const isAnonymous = p.mode === "anonymous";
             const name = isAnonymous ? "Anonyme" : ([p.firstName, p.lastName].filter(Boolean).join(" ").trim() || "Anonyme");
             
-            const hasWebcam = p.objectiveEmotionComplete ? "OUI" : "NON";
+            const hasWebcam = (p.objectiveEmotionComplete || p.dominantEmotion) ? "OUI" : "NON";
             const hasQuest = (p.questionnaireCompleted || p.subjectiveScore) ? "OUI" : "NON";
             
             let scoreSubjStr = p.subjectiveScore ? p.subjectiveScore.toString() : "";
@@ -126,7 +127,7 @@ async function loadRecap() {
         const isAnonymous = p.mode === "anonymous";
         const name = isAnonymous ? "Anonyme" : ([p.firstName, p.lastName].filter(Boolean).join(" ").trim() || "Anonyme");
         
-        const hasWebcam = p.objectiveEmotionComplete;
+        const hasWebcam = p.objectiveEmotionComplete || !!p.dominantEmotion;
         const hasQuest = p.questionnaireCompleted || (p.subjectiveScore !== undefined && p.subjectiveScore !== null);
         
         let resultHtml = `

@@ -282,6 +282,7 @@ function renderParticipants(participants) {
     p.connected === 1 ||
     (p.connected !== false && p.connected !== "false" && p.connected !== 0) || // Si pas explicitement false
     p.objectiveEmotionComplete ||
+    p.dominantEmotion ||
     p.questionnaireCompleted ||
     (p.subjectiveScore !== undefined && p.subjectiveScore !== null)
   );
@@ -322,7 +323,7 @@ function renderParticipants(participants) {
     const row = document.createElement("div");
     row.className = "participant-row";
 
-    const hasWebcam = participant.objectiveEmotionComplete;
+    const hasWebcam = participant.objectiveEmotionComplete || !!participant.dominantEmotion;
     const hasQuest = participant.questionnaireCompleted || (participant.subjectiveScore !== undefined && participant.subjectiveScore !== null);
 
     const isConnected = participant.connected === true;
@@ -336,7 +337,7 @@ function renderParticipants(participants) {
 
     // Texte pour Webcam
     let webcamText = "Webcam";
-    if (hasWebcam && participant.dominantEmotion) {
+    if (participant.dominantEmotion) {
       webcamText += ` (${emotionLabels[participant.dominantEmotion] || "Détectée"})`;
     } else {
       webcamText += " (aucune mesure)";
