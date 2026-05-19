@@ -790,7 +790,71 @@ window.disconnect = function disconnect() {
   if (modal) modal.classList.remove("hidden");
 };
 
+// NOUVELLE FONCTION: Fermer la salle définitivement (sans déconnexion)
+window.fermerSalleDefinitivement = function fermerSalleDefinitivement() {
+  // Création d'une modale UI dynamique pour éviter le confirm de base
+  const modalHtml = `
+    <div id="closeRoomModal" style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 9999;">
+      <div style="background: white; padding: 24px; border-radius: 12px; max-width: 400px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+        <div style="font-size: 40px; margin-bottom: 16px;">🚪</div>
+        <h3 style="margin-top: 0; color: #1e293b; font-size: 20px;">Fermer la salle ?</h3>
+        <p style="color: #475569; margin: 16px 0;">Voulez-vous vraiment fermer cette salle définitivement ?<br><br>Vous ne serez <b>pas déconnecté</b> de votre compte professeur et pourrez en créer une nouvelle.</p>
+        <div style="display: flex; gap: 12px; justify-content: center; margin-top: 24px;">
+          <button id="cancelCloseRoom" style="padding: 10px 16px; border: 1px solid #cbd5e1; background: transparent; border-radius: 8px; cursor: pointer; color: #475569; font-weight: 600;">Annuler</button>
+          <button id="confirmCloseRoom" style="padding: 10px 16px; border: none; background: #e11d48; color: white; border-radius: 8px; cursor: pointer; font-weight: 600;">Fermer la salle</button>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+  
+  document.getElementById('cancelCloseRoom').onclick = () => {
+    document.getElementById('closeRoomModal').remove();
+  };
+  
+  document.getElementById('confirmCloseRoom').onclick = async () => {
+    const btn = document.getElementById('confirmCloseRoom');
+    btn.textContent = "Fermeture...";
+    btn.disabled = true;
+    
+    if (firebaseApi && typeof roomId !== 'undefined' && roomId) {
+      try {
+        await mergeRoomMetaPatch({ activityStatus: "ended", activityEndedAt: Date.now() });
+        const teacherUid = localStorage.getItem("currentTeacherUid");
+        if (teacherUid) {
+          await firebaseApi.set(firebaseApi.ref(firebaseApi.db, `teachers/${teacherUid}/lastRoomCode`), null);
+        }
+      } catch(e) {
+        console.error("Erreur fermeture salle:", e);
+      }
+    }
+    
+    // On supprime juste le code de la salle en cours, on GARDE les identifiants prof (currentUser)
+    localStorage.removeItem("currentRoomCode");
+    
+    document.getElementById('closeRoomModal').remove();
+    window.location.href = "dashboard-prof.html";
+  };
+};
+
 document.addEventListener("DOMContentLoaded", () => {
+  // Injection du bouton "Fermer la salle" de façon dynamique
+  setTimeout(() => {
+    const toggleBtn = document.getElementById("btnToggleActivity");
+    if (toggleBtn && toggleBtn.parentElement && !document.getElementById("btnFermerSalleDef")) {
+      const btnFermer = document.createElement("button");
+      btnFermer.id = "btnFermerSalleDef";
+      btnFermer.innerHTML = "🚪 Fermer la salle";
+      btnFermer.style.cssText = "background: #e11d48; color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: 600; margin-left: 15px; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: opacity 0.2s;";
+      btnFermer.onmouseover = () => btnFermer.style.opacity = "0.8";
+      btnFermer.onmouseout = () => btnFermer.style.opacity = "1";
+      btnFermer.onclick = window.fermerSalleDefinitivement;
+      
+      toggleBtn.parentElement.appendChild(btnFermer);
+    }
+  }, 500);
+
   const modal = document.getElementById("disconnectModal");
   const cancelBtn = document.getElementById("cancelDisconnectBtn");
   const confirmBtn = document.getElementById("confirmDisconnectBtn");
