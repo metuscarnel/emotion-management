@@ -65,6 +65,17 @@ async function loadRecap() {
       }
     });
 
+    // Intégrer également les données en direct (Live) des participants
+    participants.forEach(p => {
+      if (!p.objectiveEmotionComplete && p.liveStats) {
+        Object.entries(p.liveStats).forEach(([emo, count]) => {
+          if (emotionStats[emo] !== undefined) emotionStats[emo] += Number(count);
+        });
+      } else if (!p.objectiveEmotionComplete && p.dominantEmotion && emotionStats[p.dominantEmotion] !== undefined) {
+        emotionStats[p.dominantEmotion] += 1;
+      }
+    });
+
     let totalScore = 0;
     let countScore = 0;
     let globalEmotionCounts = {};
@@ -99,7 +110,7 @@ async function loadRecap() {
               else emotionSubjStr = "Colere";
             }
             
-            let emotionObjStr = p.dominantEmotion ? p.dominantEmotion : "";
+            let emotionObjStr = p.dominantEmotion ? (emotionLabels[p.dominantEmotion] || p.dominantEmotion) : "";
             
             const escape = str => `"${String(str).replace(/"/g, '""')}"`;
             csvContent += `${escape(name)},"Mixte (Webcam+Quest.)",${escape(hasWebcam)},${escape(hasQuest)},${escape(scoreSubjStr)},${escape(emotionSubjStr)},${escape(emotionObjStr)}\n`;
